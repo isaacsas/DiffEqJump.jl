@@ -2,7 +2,7 @@
 using DiffEqJump, DiffEqBase, OrdinaryDiffEq
 using Base.Test
 
-doPrint = false
+doprint = false
 
 function A_to_B_mean(N)
     Nsims    = 32000
