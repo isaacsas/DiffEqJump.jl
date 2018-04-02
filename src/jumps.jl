@@ -13,6 +13,7 @@ function get_jump_info_tuples(constant_jumps)
   return rates, affects!
 end
 
+using FunctionWrappers
 function get_jump_info_fwrappers(u, p, t, constant_jumps)
   RateWrapper   = FunctionWrappers.FunctionWrapper{typeof(t),Tuple{typeof(u), typeof(p), typeof(t)}}
   rates         = [RateWrapper(c.rate) for c in constant_jumps]
