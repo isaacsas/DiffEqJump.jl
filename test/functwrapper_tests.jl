@@ -37,7 +37,7 @@ function A_to_B_mean(N)
         Asamp[i] = sol[1,end]
     end
 
-    if doPrint
+    if doprint
         println("samp mean: ", mean(Asamp), ", act mean = ", exactmean(tf))
     end
 
