@@ -57,7 +57,7 @@ end
   @inbounds cur_rates[idx] = rate(u,p,t)
   nothing
 end
-##################################################################
+
 
 ############ FunctionWrapper based time to next jump #############
 function time_to_next_jump(u, p, t, rates::Vector{T}, cur_rates) where T
@@ -71,35 +71,15 @@ function time_to_next_jump(u, p, t, rates::Vector{T}, cur_rates) where T
   @inbounds sum_rate = cur_rates[end]
   sum_rate,randexp()/sum_rate
 end
-##################################################################
 
-function getRatesAffectsAsTuples(constant_jumps)
-  rates    = ((c.rate for c in constant_jumps)...)
-  affects! = ((c.affect! for c in constant_jumps)...)
-
-  return rates, affects!
-end
-
-function getRatesAffectsAsFWrappers(u, p, t, constant_jumps)
-  RateWrapper   = FunctionWrappers.FunctionWrapper{typeof(t),Tuple{typeof(u), typeof(p), typeof(t)}}
-  rates         = [RateWrapper(c.rate) for c in constant_jumps]
-  AffectWrapper = FunctionWrappers.FunctionWrapper{Void,Tuple{Any}}
-  affects!      = [AffectWrapper(x->(c.affect!(x);nothing)) for c in constant_jumps]
-
-  return rates, affects!
-end
-
-
-# when to switch from tuples for rates/affects to FunctionWrappers
-const TUPLE_TO_FWRAPPER_CUTOFF = 10
 
 @inline function aggregate(aggregator::Direct,u,p,t,end_time,constant_jumps,save_positions)
 
   # decide if representing rates/affects as tuples or function wrappers
   if length(constant_jumps) < TUPLE_TO_FWRAPPER_CUTOFF
-    rates,affects! = getRatesAffectsAsTuples(constant_jumps)
+    rates,affects! = get_jump_info_tuples(constant_jumps)
   else
-    rates,affects! = getRatesAffectsAsFWrappers(u,p,t,constant_jumps)
+    rates,affects! = get_jump_info_fwrappers(u,p,t,constant_jumps)
   end
 
   cur_rates = Vector{typeof(t)}(length(rates))

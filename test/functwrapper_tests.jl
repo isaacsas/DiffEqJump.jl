@@ -4,7 +4,7 @@ using Base.Test
 
 doPrint = false
 
-function testAtoBMean(N)
+function A_to_B_mean(N)
     Nsims    = 32000
     tf       = .1
     baserate = .1
@@ -47,7 +47,7 @@ end
 
 
 # tuples
-testAtoBMean(5)
+A_to_B_mean(5)
 
 # function wrappers
-testAtoBMean(15)
+A_to_B_mean(15)
