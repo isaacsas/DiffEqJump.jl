@@ -1,4 +1,3 @@
-using FunctionWrappers
 
 type DirectJumpAggregation{T,F1,F2} <: AbstractJumpAggregator
   next_jump::T
