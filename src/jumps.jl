@@ -67,7 +67,7 @@ struct MassActionJump{T,S} <: AbstractJump
   end
 
 end
-MassActionJump(usr::T, rs::S, ns::S; scale_rates = true ) where {T,S} = MassActionJump{T,S}(usr, rs, ns, scale_rates)
+MassActionJump(usr::T, rs::S, ns::S; scale_rates = true) where {T,S} = MassActionJump{T,S}(usr, rs, ns, scale_rates)
 
 struct JumpSet{T1,T2,T3,T4} <: AbstractJump
   variable_jumps::T1
