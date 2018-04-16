@@ -40,10 +40,12 @@ struct MassActionJump{T,S} <: AbstractJump
   scaled_rates::T
   reactant_stoch::S
   net_stoch::S
+  num_dep_specs::Vector{Int}
 
   function MassActionJump{T,S}(rates::T, rs_in::S, ns::S, scale_rates::Bool) where {T <: AbstractVector,S}
     sr  = copy(rates)
     rs = copy(rs_in)
+    num_dep_specs = zeros(Int, size(rates))
     for i in eachindex(rs)
       if (length(rs[i]) == 1) && (rs[i][1][1] == 0)
         rs[i] = typeof(rs[i])()
@@ -121,12 +123,12 @@ check_majump_type(maj::MassActionJump{S,T}) where {S <: Number, T} = setup_majum
 
 # if given containers of rates and stoichiometry directly create a jump
 function setup_majump_to_merge(sr::T, rs::AbstractVector{S}, ns::AbstractVector{S}) where {T <: AbstractVector, S <: AbstractArray}
-  MassActionJump(sr, rs, ns)
+  MassActionJump(sr, rs, ns; scale_rates=false)
 end
 
 # if just given the data for one jump (and not in a container) wrap in a vector
 function setup_majump_to_merge(sr::T, rs::S, ns::S) where {T <: Number, S <: AbstractArray}
-  MassActionJump([sr], [rs], [ns])
+  MassActionJump([sr], [rs], [ns]; scale_rates=false)
 end
 
 # when given a collection of reactions to add to maj
@@ -148,7 +150,7 @@ end
 # when maj only stores a single jump's worth of data (and not in a collection)
 # create a new jump with the merged data stored in vectors
 function majump_merge!(maj::MassActionJump{T,S}, sr::T, rs::S, ns::S) where {T <: Number, S <: AbstractArray}
-  MassActionJump([maj.scaled_rates, sr], [maj.reactant_stoch, rs], [maj.net_stoch, ns])
+  MassActionJump([maj.scaled_rates, sr], [maj.reactant_stoch, rs], [maj.net_stoch, ns]; scale_rates=false)
 end
 
 massaction_jump_combine(maj1::MassActionJump, maj2::Void) = maj1
