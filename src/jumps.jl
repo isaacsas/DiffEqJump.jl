@@ -36,38 +36,57 @@ RegularJump(rate,c,dc;mark_dist = nothing,constant_c = false) =
             RegularJump(rate,c,dc,mark_dist,constant_c)
 
 
-struct MassActionJump{T,S} <: AbstractJump
+function count_spec_in(ns::AbstractVector{T}) where {U,V,T <: Pair{U,V}}
+  num_specs = zero(V)
+  for k in eachindex(ns)
+    if ns[k][1] != zero(U)
+      num_specs += one(V)
+    end
+  end
+  num_specs
+end
+
+struct MassActionJump{T,S,U,V} <: AbstractJump
   scaled_rates::T
   reactant_stoch::S
-  net_stoch::S
-  num_dep_specs::Vector{Int}
-
-  function MassActionJump{T,S}(rates::T, rs_in::S, ns::S, scale_rates::Bool) where {T <: AbstractVector,S}
-    sr  = copy(rates)
-    rs = copy(rs_in)
-    num_dep_specs = zeros(Int, size(rates))
-    for i in eachindex(rs)
-      if (length(rs[i]) == 1) && (rs[i][1][1] == 0)
-        rs[i] = typeof(rs[i])()
-      end
-    end
-
-    if scale_rates && !isempty(sr) 
-      scalerates!(sr, rs)
-    end
-    new(sr, rs, ns)
-  end
-  function MassActionJump{T,S}(rate::T, rs_in::S, ns::S, scale_rates::Bool) where {T <: Number,S}    
-    rs = rs_in
-    if (length(rs) == 1) && (rs[1][1] == 0)
-      rs = typeof(rs)()
-    end
-    sr = scale_rates ? scalerate(rate, rs) : rate
-    new(sr, rs, ns)
-  end
-
+  net_stoch::U
+  num_dep_specs::V
+  num_chg_specs::V
 end
-MassActionJump(usr::T, rs::S, ns::S; scale_rates = true) where {T,S} = MassActionJump{T,S}(usr, rs, ns, scale_rates)
+
+# constructor for creating jump representing many reactions
+function MassActionJump(rates::T, rs_in::S, ns::U; scale_rates = true) where {T <: AbstractVector,S,U}
+  sr = copy(rates)
+  rs = deepcopy(rs_in)
+  num_dep_specs = count_spec_in.(rs)
+  num_chg_specs = count_spec_in.(ns)
+  
+  # replace [0=>1] with empty vector
+  for i in eachindex(rs)
+    if (length(rs[i]) == 1) && (rs[i][1][1] == 0)
+      rs[i] = typeof(rs[i])()
+    end
+  end
+
+  if scale_rates && !isempty(sr) 
+    scalerates!(sr, rs, num_dep_specs)
+  end
+
+  MassActionJump(sr, rs, ns, num_dep_specs, num_chg_specs)
+end
+
+# constructor for creating jump representing just one reaction
+function MassActionJump(rate::T, rs_in::S, ns::U; scale_rates = true) where {T <: Number,S,U}    
+  rs = copy(rs_in)
+  num_dep_specs = count_spec_in(rs)
+  num_chg_specs = count_spec_in(ns)
+  if (length(rs) == 1) && (rs[1][1] == 0)
+    rs = typeof(rs)()
+  end
+  sr = scale_rates ? scalerate(rate, rs, num_dep_specs) : rate
+  MassActionJump(sr, rs, ns, num_dep_specs, num_chg_specs)
+end
+#MassActionJump(usr::T, rs::S, ns::U; scale_rates = true) where {T,S,U} = MassActionJump{T,S,U}(usr, rs, ns, scale_rates)
 
 struct JumpSet{T1,T2,T3,T4} <: AbstractJump
   variable_jumps::T1

@@ -1,10 +1,10 @@
 using DiffEqBase, DiffEqJump
 using Base.Test
 
-# using Plots; plotlyjs()
+#using Plots; plotlyjs()
 doplot = false
-# using BenchmarkTools
-# dobenchmark = false
+using BenchmarkTools
+dobenchmark = true
 
 dotestmean   = true
 doprintmeans = false
@@ -12,6 +12,8 @@ doprintmeans = false
 # SSAs to test
 SSAalgs = (Direct(),) #, DirectFW(), FRM(), FRMFW())
 
+#Nsims        = 100; 
+#tf           = 5000.0 
 Nsims        = 8000
 tf           = 1000.0
 u0           = [1,0,0,0]
@@ -61,6 +63,26 @@ netstoch =
     [1 => -1, 3 => -1, 4 => 1],
     [1 => 1, 3 => 1, 4 => -1] 
 ]
+using StaticArrays
+reactstoch = 
+[ 
+    SVector{3}([1 => 1, 0 => 1, 0 => 1]),
+    SVector{3}([2 => 1, 0 => 1, 0 => 1]),
+    SVector{3}([2 => 1, 0 => 1, 0 => 1]),
+    SVector{3}([3 => 1, 0 => 1, 0 => 1]),
+    SVector{3}([1 => 1, 3 => 1, 0 => 1]),
+    SVector{3}([4 => 1, 0 => 1, 0 => 1]) 
+]
+netstoch = 
+[ 
+    SVector{6}([2 => 1, 0 => 1, 0 => 1, 0 => 1, 0 => 1, 0 => 1]),
+    SVector{6}([3 => 1, 0 => 1, 0 => 1, 0 => 1, 0 => 1, 0 => 1]),
+    SVector{6}([2 => -1, 0 => 1, 0 => 1, 0 => 1, 0 => 1, 0 => 1]),
+    SVector{6}([3 => -1, 0 => 1, 0 => 1, 0 => 1, 0 => 1, 0 => 1]),
+    SVector{6}([1 => -1, 3 => -1, 4 => 1, 0 => 1, 0 => 1, 0 => 1]),
+    SVector{6}([1 => 1, 3 => 1, 4 => -1, 0 => 1, 0 => 1, 0 => 1]) 
+]
+#rates = [30*.5, 30*(20*log(2.)/120.), (log(2.)/120.), (log(2.)/600.), .025, 1.]
 rates = [.5, (20*log(2.)/120.), (log(2.)/120.), (log(2.)/600.), .025, 1.]
 majumps = MassActionJump(rates, reactstoch, netstoch)
 
@@ -90,9 +112,9 @@ if dotestmean
             println("Mean from method: ", typeof(alg), " is = ", means[i], ", rel err = ", relerr)
         end
 
-        # if dobenchmark
-        #     @btime (runSSAs($jump_prob);)
-        # end
+        if dobenchmark
+            @btime (runSSAs($jump_prob);)
+        end
 
 
         @test abs(means[i] - expected_avg) < reltol*expected_avg
@@ -101,13 +123,14 @@ end
 
 
 # benchmark performance
-# if dobenchmark
-#     # exact methods
-#     for alg in SSAalgs
-#         println("Solving with method: ", typeof(alg), ", using SSAStepper")
-#         jump_prob = JumpProblem(prob, alg, majumps)
-#         @btime solve($jump_prob, SSAStepper())
-#     end
-#     println()
-# end
+if dobenchmark
+    # exact methods
+    for alg in SSAalgs
+        println("Solving with method: ", typeof(alg), ", using SSAStepper")
+        jump_prob = JumpProblem(prob, alg, majumps, save_positions=(false,false))
+        @btime solve($jump_prob, SSAStepper(), saveat=(tf/1000.))
+        #@btime runSSAs($jump_prob)
+    end
+    println()
+end
 
