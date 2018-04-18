@@ -10,10 +10,7 @@
 @fastmath function evalrxrate(speciesvec::AbstractVector{T}, rxidx::S, 
                               majump::MassActionJump{U,V,W})::R where {T,S,R,U <: AbstractVector{R},V,W}
     val = one(T)
-
-    rateconst = majump.scaled_rates[rxidx]
-    stochmat  = majump.reactant_stoch[rxidx]
-
+    @inbounds stochmat  = majump.reactant_stoch[rxidx]
     @inbounds for specstoch in stochmat
         specpop = speciesvec[specstoch[1]]
         val    *= specpop
@@ -23,7 +20,8 @@
         end
     end
 
-    rateconst * val
+    @inbounds rateconst = val * majump.scaled_rates[rxidx]
+    rateconst
 end
 
 
@@ -34,7 +32,7 @@ end
 @inline @fastmath function executerx!(speciesvec::AbstractVector{T}, rxidx::S, 
                                       majump::MassActionJump{U,V,W}) where {T,S,U,V,W}                                        
 
-    net_stoich = majump.net_stoch[rxidx]                                      
+    @inbounds net_stoich = majump.net_stoch[rxidx]                                      
     @inbounds for specstoch in net_stoich
         speciesvec[specstoch[1]] += specstoch[2]
     end
@@ -75,10 +73,8 @@ using StaticArrays
 @fastmath function evalrxrate(speciesvec::AbstractVector{T}, rxidx::S, 
                               majump::MassActionJump{U,V,W})::R where {T,S,R,U <: AbstractVector{R},P1,P2,P<:Pair{P1,P2}, SA1 <:SArray{Tuple{3},P}, SA2 <:SArray{Tuple{6},P}, V <: AbstractVector{SA1}, W <: AbstractVector{SA2}}
 
-    num_dep_specs = majump.num_dep_specs[rxidx]
-    stochmat      = majump.reactant_stoch[rxidx]
-    rateconst     = majump.scaled_rates[rxidx]
-
+    @inbounds num_dep_specs = majump.num_dep_specs[rxidx]
+    @inbounds stochmat      = majump.reactant_stoch[rxidx]    
     val = one(T)
     @inbounds for idx = 1:num_dep_specs
         stoich  = stochmat[idx]
@@ -90,7 +86,8 @@ using StaticArrays
         end
     end
 
-    rateconst * val
+    @inbounds rateconst = val * majump.scaled_rates[rxidx]
+    rateconst
 end
 
 # @inline @fastmath function executerx!(speciesvec::AbstractVector{T},
@@ -100,14 +97,12 @@ end
 @inline @fastmath function executerx!(speciesvec::AbstractVector{T}, rxidx::S,
                                       majump::MassActionJump{U,V,W}) where {T,S,U,P1,P2,P<:Pair{P1,P2}, SA1 <:SArray{Tuple{3},P}, SA2 <:SArray{Tuple{6},P}, V <: AbstractVector{SA1}, W <: AbstractVector{SA2}}
     
-    num_chg_specs = majump.num_chg_specs[rxidx]
-    net_stoich = majump.net_stoch[rxidx]
-
+    @inbounds num_chg_specs = majump.num_chg_specs[rxidx]
+    @inbounds net_stoich    = majump.net_stoch[rxidx]
     @inbounds for idx = 1:num_chg_specs
         stoich = net_stoich[idx]
         speciesvec[stoich[1]] += stoich[2]
     end
-
     nothing
 end
 
