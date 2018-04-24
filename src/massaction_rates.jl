@@ -103,6 +103,16 @@ using StaticArrays
             break
         end
     end
+    # @inbounds for idx in 1:majdat.num_dep_specs 
+    #     specstoch = majdat.reactant_stoch[idx]
+    #     specpop = speciesvec[specstoch[1]]
+    #     val    *= specpop
+    #     @inbounds for k = 2:specstoch[2]
+    #         specpop -= one(specpop)
+    #         val     *= specpop
+    #     end
+    # end
+
 
     @inbounds return val * majdat.scaled_rate
 end
