@@ -7,11 +7,11 @@
 #                               stochmat::AbstractVector{Pair{S,V}}, 
 #                               num_dep_specs=nothing)::typeof(rateconst) where {T,S,V}
 
-@fastmath function evalrxrate(speciesvec::AbstractVector{T}, rxidx::S, 
+@inline @fastmath function evalrxrate(speciesvec::AbstractVector{T}, rxidx::S, 
                               majump::MassActionJump{U,V,W})::R where {T,S,R,U <: AbstractVector{R},V,W}
+
     val = one(T)
-    @inbounds stochmat  = majump.reactant_stoch[rxidx]
-    @inbounds for specstoch in stochmat
+    @inbounds for specstoch in majump.reactant_stoch[rxidx]
         specpop = speciesvec[specstoch[1]]
         val    *= specpop
         @inbounds for k = 2:specstoch[2]
@@ -19,9 +19,7 @@
             val     *= specpop
         end
     end
-
-    @inbounds rateconst = val * majump.scaled_rates[rxidx]
-    rateconst
+    @inbounds return val * majump.scaled_rates[rxidx]
 end
 
 
@@ -67,46 +65,41 @@ end
 # Stochiometry for a given reaction is a StaticArrays vector of pairs mapping 
 # species id to stochiometric coefficient.
 ###############################################################################
-
 using StaticArrays
-# majump::MassActionJump{U,V,W})::R where {T,S,R,U<:AbstractVector{R},SA1<:SArray,SA2<:SArray,V<:AbstractVector{SA1},W<:AbstractVector{SA2}}
-@fastmath function evalrxrate(speciesvec::AbstractVector{T}, rxidx::S, 
+@inline @fastmath function evalrxrate(speciesvec::AbstractVector{T}, rxidx::S, 
                               majump::MassActionJump{U,V,W})::R where {T,S,R,U <: AbstractVector{R},P1,P2,P<:Pair{P1,P2}, SA1 <:SArray{Tuple{3},P}, SA2 <:SArray{Tuple{6},P}, V <: AbstractVector{SA1}, W <: AbstractVector{SA2}}
 
-    @inbounds num_dep_specs = majump.num_dep_specs[rxidx]
-    @inbounds stochmat      = majump.reactant_stoch[rxidx]    
     val = one(T)
-    @inbounds for idx = 1:num_dep_specs
-        stoich  = stochmat[idx]
-        specpop = speciesvec[stoich[1]]
-        val    *= specpop
-        @inbounds for k = 2:stoich[2]
-            specpop -= one(specpop)
-            val     *= specpop
+    @inbounds for specstoch in majump.reactant_stoch[rxidx]
+        if specstoch[1] > 0
+            @inbounds specpop = speciesvec[specstoch[1]]
+            val    *= specpop
+            @inbounds for k = 2:specstoch[2]
+                specpop -= one(specpop)
+                val     *= specpop
+            end
+        else
+            break
         end
     end
 
-    @inbounds rateconst = val * majump.scaled_rates[rxidx]
-    rateconst
+    @inbounds return val * majump.scaled_rates[rxidx]
 end
 
-# @inline @fastmath function executerx!(speciesvec::AbstractVector{T},
-#                                       net_stoich::SArray{Tuple{6},Pair{S,V}}, 
-#                                       num_dep_specs) where {T,S,V}
-#majump::MassActionJump{U,V,W})::R where {T,S,U,SA1<:SArray,SA2<:SArray,V<:AbstractVector{SA1},W<:AbstractVector{SA2}}
 @inline @fastmath function executerx!(speciesvec::AbstractVector{T}, rxidx::S,
                                       majump::MassActionJump{U,V,W}) where {T,S,U,P1,P2,P<:Pair{P1,P2}, SA1 <:SArray{Tuple{3},P}, SA2 <:SArray{Tuple{6},P}, V <: AbstractVector{SA1}, W <: AbstractVector{SA2}}
-    
-    @inbounds num_chg_specs = majump.num_chg_specs[rxidx]
-    @inbounds net_stoich    = majump.net_stoch[rxidx]
-    @inbounds for idx = 1:num_chg_specs
-        stoich = net_stoich[idx]
-        speciesvec[stoich[1]] += stoich[2]
+
+    @inbounds net_stoich = majump.net_stoch[rxidx]
+    @inbounds for specstoich in net_stoich
+        if specstoich[1] > 0
+            @inbounds speciesvec[specstoich[1]] += specstoich[2]
+        else
+            break
+        end
     end
     nothing
 end
 
-#                     num_dep_specs_vec::AbstractVector{W}) where {U,S,T,V <: SArray, W}
 function scalerates!(unscaled_rates::AbstractVector{U}, stochmat::AbstractVector{V}, 
                      num_dep_specs_vec::AbstractVector{W}) where {U,S,T,R <: Pair{S,T}, V <: SArray{Tuple{3},R}, W}
 

@@ -101,7 +101,7 @@ end
   majumps   = p.ma_jumps
   idx       = length(majumps.scaled_rates)
   @inbounds for i in 1:idx
-    new_rate     = evalrxrate(u, i, majumps)
+    new_rate     = evalrxrate(u, i, majumps)    
     cur_rates[i] = new_rate + prev_rate
     prev_rate    = cur_rates[i]
   end
