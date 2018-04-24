@@ -3,7 +3,7 @@
 # stochiometric coefficient.
 ###############################################################################
 
-@fastmath function evalrxrate(speciesvec::AbstractVector{T}, rateconst,
+@inline @fastmath function evalrxrate(speciesvec::AbstractVector{T}, rateconst,
                               stochmat::AbstractVector{Pair{S,V}})::typeof(rateconst) where {T,S,V}
     val = one(T)
 
