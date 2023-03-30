@@ -695,7 +695,7 @@ function get_jump_info_fwrappers(u, p, t, constant_jumps)
 
     if (constant_jumps !== nothing) && !isempty(constant_jumps)
         rates = [RateWrapper(c.rate) for c in constant_jumps]
-        affects! = [AffectWrapper(x -> (c.affect!(x); nothing)) for c in constant_jumps]
+        affects! = [AffectWrapper(c.affect!) for c in constant_jumps]
     else
         rates = Vector{RateWrapper}()
         affects! = Vector{AffectWrapper}()
