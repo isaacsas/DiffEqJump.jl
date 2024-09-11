@@ -59,8 +59,8 @@ page](https://docs.sciml.ai/JumpProcesses/stable/tutorials/discrete_stochastic_e
 DifferentialEquations.jl [docs](https://docs.sciml.ai/JumpProcesses/stable/) for usage examples and
 commonly asked questions.
 """
-mutable struct JumpProblem{iip, P, A, C, J <: Union{Nothing, AbstractJumpAggregator}, J2,
-    J3, J4, R, K} <: DiffEqBase.AbstractJumpProblem{P, J}
+mutable struct JumpProblem{iip, P, A, C, J <: Union{Nothing, AbstractJumpAggregator}, J1, 
+    J2, J3, J4, R, K} <: DiffEqBase.AbstractJumpProblem{P, J}
     """The type of problem to couple the jumps to. For a pure jump process use `DiscreteProblem`, to couple to ODEs, `ODEProblem`, etc."""
     prob::P
     """The aggregator algorithm that determines the next jump times and types for `ConstantRateJump`s and `MassActionJump`s. Examples include `Direct`."""
@@ -69,6 +69,8 @@ mutable struct JumpProblem{iip, P, A, C, J <: Union{Nothing, AbstractJumpAggrega
     discrete_jump_aggregation::J
     """`CallBackSet` with the underlying `ConstantRate` and `VariableRate` jumps."""
     jump_callback::C
+    """The `ConstantRateJump`s"""
+    constant_jumps::J1
     """The `VariableRateJump`s."""
     variable_jumps::J2
     """The `RegularJump`s."""
@@ -80,10 +82,11 @@ mutable struct JumpProblem{iip, P, A, C, J <: Union{Nothing, AbstractJumpAggrega
     """kwargs to pass on to solve call."""
     kwargs::K
 end
-function JumpProblem(p::P, a::A, dj::J, jc::C, vj::J2, rj::J3, mj::J4,
+function JumpProblem(p::P, a::A, dj::J, jc::C, cj::J1, vj::J2, rj::J3, mj::J4,
         rng::R, kwargs::K) where {P, A, J, C, J2, J3, J4, R, K}
     iip = isinplace_jump(p, rj)
-    JumpProblem{iip, P, A, C, J, J2, J3, J4, R, K}(p, a, dj, jc, vj, rj, mj, rng, kwargs)
+    JumpProblem{iip, P, A, C, J, J1, J2, J3, J4, R, K}(p, a, dj, jc, cj, vj, rj, mj,
+         rng, kwargs)
 end
 
 ######## remaking ######
@@ -145,9 +148,9 @@ function DiffEqBase.remake(jprob::JumpProblem; kwargs...)
         end
     end
 
-    T(newprob, jprob.aggregator, jprob.discrete_jump_aggregation, jprob.jump_callback,
-        jprob.variable_jumps, jprob.regular_jump, jprob.massaction_jump, jprob.rng,
-        jprob.kwargs)
+    T(newprob, jprob.aggregator, jprob.discrete_jump_aggregation, jprob.jump_callback, 
+        jprob.constant_jumps jprob.variable_jumps, jprob.regular_jump, 
+        jprob.massaction_jump, jprob.rng, jprob.kwargs)
 end
 
 # when setindex! is used.
@@ -295,12 +298,10 @@ function JumpProblem(prob, aggregator::AbstractAggregatorAlgorithm, jumps::JumpS
 
     JumpProblem{iip, typeof(new_prob), typeof(aggregator),
         typeof(jump_cbs), typeof(disc_agg),
-        typeof(cont_agg),
+        typeof(jumps.constant_jumps), typeof(cont_agg),
         typeof(jumps.regular_jump),
         typeof(maj), typeof(rng), typeof(solkwargs)}(new_prob, aggregator, disc_agg,
-        jump_cbs, cont_agg,
-        jumps.regular_jump, maj, rng,
-        solkwargs)
+        jump_cbs, jumps.constant_jumps, cont_agg, jumps.regular_jump, maj, rng, solkwargs)
 end
 
 # extends prob.u0 to an ExtendedJumpArray with Njumps integrated intensity values,
@@ -468,10 +469,9 @@ function build_variable_callback(cb, idx, jump; rng = DEFAULT_RNG)
     CallbackSet(cb, new_cb)
 end
 
-aggregator(jp::JumpProblem{iip, P, A, C, J}) where {iip, P, A, C, J} = A
+aggregator(jp::JumpProblem{iip, P, A}) where {iip, P, A} = A
 
-@inline function extend_tstops!(tstops,
-        jp::JumpProblem{P, A, C, J, J2}) where {P, A, C, J, J2}
+@inline function extend_tstops!(tstops, jp::JumpProblem) 
     !(jp.jump_callback.discrete_callbacks isa Tuple{}) &&
         push!(tstops, jp.jump_callback.discrete_callbacks[1].condition.next_jump_time)
 end

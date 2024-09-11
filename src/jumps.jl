@@ -225,7 +225,7 @@ rj = RegularJump(rate!, c, 2)
 - `mark_dist` is not currently used or supported in τ-leaping methods.
 ```
 """
-struct RegularJump{iip, R, C, MD}
+struct RegularJump{iip, R, C, MD, MAJ, RS, AS}
     """
     Function `rate!(rate_vals, u, p, t)` that returns the current rates, i.e.
     intensities or propensities, for all possible jumps in `rate_vals`.
@@ -240,15 +240,30 @@ struct RegularJump{iip, R, C, MD}
     numjumps::Int
     """ A distribution for marks. Not currently used or supported. """
     mark_dist::MD
-    function RegularJump{iip}(rate, c, numjumps::Int; mark_dist = nothing) where {iip}
-        new{iip, typeof(rate), typeof(c), typeof(mark_dist)}(rate, c, numjumps, mark_dist)
+    """A MassActionJump for split jump model"""
+    maj::MAJ
+    """ Linearly indexable collection of functions, with `rates[i](u, p, t)``, returning the
+    current rate for the `i` jump type."""
+    rates::RS
+    """ Linearly indexable collection of functions, with `affects![i](u, p, t, count)` and
+    `affects![i](u, p, t, count, ::AllowAffectRejection)` applying the `i`th jump `count`
+    times to `u`. The latter version should return `true` if the affect was applied, or
+    `false` if applying the affect was rejected (for example, due to it pushing the system
+    into a non-physical state)."""    
+    affects!::AS
+    function RegularJump{iip}(rate, c, numjumps::Int; maj = nothing, rates = nothing, 
+            affects! = nothing, mark_dist = nothing) where {iip}
+        new{iip, typeof(rate), typeof(c), typeof(mark_dist)}(rate, c, numjumps, mark_dist, 
+            maj, rates, affects!)
     end
 end
 
 DiffEqBase.isinplace(::RegularJump{iip, R, C, MD}) where {iip, R, C, MD} = iip
 
-function RegularJump(rate, c, numjumps::Int; kwargs...)
-    RegularJump{DiffEqBase.isinplace(rate, 4)}(rate, c, numjumps; kwargs...)
+function RegularJump(rate, c, numjumps::Int; maj = nothing, rates = nothing, 
+        affects! = nothing, kwargs...)
+    RegularJump{DiffEqBase.isinplace(rate, 4)}(rate, c, numjumps; maj, rates, affects!, 
+        kwargs...)
 end
 
 # deprecate old call

@@ -36,12 +36,30 @@ end
             specstoch[1])
     end
     speciesvec
+end
 
-    #=
-    map(net_stoch) do stoch
-        @inbounds speciesvec[stoch[1]] + stoch[2]
+# for normal tau-leaping
+@inline function executerx!(speciesvec::AbstractVector{T}, rxidx::S, 
+        majump::M, count) where {T, S, M <: AbstractMassActionJump}
+    @inbounds net_stoch = majump.net_stoch[rxidx]
+    @inbounds for specstoch in net_stoch
+        speciesvec[specstoch[1]] += count * specstoch[2]
     end
-    =#
+    speciesvec
+end
+
+struct AllowAffectRejection end
+
+# for tau-leaping that wants to reject negative states
+@inline function executerx!(speciesvec::AbstractVector{T}, rxidx::S, majump::M, 
+    count, ::Type{AllowAffectRejection}) where {T, S, M <: AbstractMassActionJump}
+    @inbounds net_stoch = majump.net_stoch[rxidx]
+    @inbounds for specstoch in net_stoch
+        newval = speciesvec[specstoch[1]] + count * specstoch[2]        
+        (newval < 0) && (return (speciesvec, false))
+    end
+    executerx!(speciesvec, rxidx, majump, count)
+    (speciesvec, true)
 end
 
 function scalerates!(unscaled_rates::AbstractVector{U},
