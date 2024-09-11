@@ -83,7 +83,7 @@ mutable struct JumpProblem{iip, P, A, C, J <: Union{Nothing, AbstractJumpAggrega
     kwargs::K
 end
 function JumpProblem(p::P, a::A, dj::J, jc::C, cj::J1, vj::J2, rj::J3, mj::J4,
-        rng::R, kwargs::K) where {P, A, J, C, J2, J3, J4, R, K}
+        rng::R, kwargs::K) where {P, A, J, C, J1, J2, J3, J4, R, K}
     iip = isinplace_jump(p, rj)
     JumpProblem{iip, P, A, C, J, J1, J2, J3, J4, R, K}(p, a, dj, jc, cj, vj, rj, mj,
          rng, kwargs)
@@ -149,7 +149,7 @@ function DiffEqBase.remake(jprob::JumpProblem; kwargs...)
     end
 
     T(newprob, jprob.aggregator, jprob.discrete_jump_aggregation, jprob.jump_callback, 
-        jprob.constant_jumps jprob.variable_jumps, jprob.regular_jump, 
+        jprob.constant_jumps, jprob.variable_jumps, jprob.regular_jump, 
         jprob.massaction_jump, jprob.rng, jprob.kwargs)
 end
 

@@ -253,8 +253,8 @@ struct RegularJump{iip, R, C, MD, MAJ, RS, AS}
     affects!::AS
     function RegularJump{iip}(rate, c, numjumps::Int; maj = nothing, rates = nothing, 
             affects! = nothing, mark_dist = nothing) where {iip}
-        new{iip, typeof(rate), typeof(c), typeof(mark_dist)}(rate, c, numjumps, mark_dist, 
-            maj, rates, affects!)
+        new{iip, typeof(rate), typeof(c), typeof(mark_dist), typeof(maj), typeof(rates), 
+            typeof(affects!)}(rate, c, numjumps, mark_dist, maj, rates, affects!)
     end
 end
 
