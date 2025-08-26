@@ -22,7 +22,6 @@ end
         @time @safetestset "Monte Carlo Tests" begin include("monte_carlo_test.jl") end
         @time @safetestset "Split Coupled Tests" begin include("splitcoupled.jl") end
         @time @safetestset "SSA Tests" begin include("ssa_tests.jl") end
-        @time @safetestset "Tau Leaping Tests" begin include("regular_jumps.jl") end
         @time @safetestset "Simple SSA Callback Test" begin include("ssa_callback_test.jl") end
         @time @safetestset "SIR Discrete Callback Test" begin include("sir_model.jl") end
         @time @safetestset "Linear Reaction SSA Test" begin include("linearreaction_test.jl") end
@@ -38,6 +37,8 @@ end
     if GROUP == "All" || GROUP == "InterfaceII"
         @time @safetestset "Saveat Regression test" begin include("saveat_regression.jl") end
         @time @safetestset "Save_positions test" begin include("save_positions.jl") end
+        @time @safetestset "Tau Leaping Tests" begin include("regular_jumps.jl") end
+        @time @safetestset "SimpleSplitTauLeaping Tests" begin include("split_tau_leaping.jl") end
         @time @safetestset "Ensemble Uniqueness test" begin include("ensemble_uniqueness.jl") end
         @time @safetestset "Thread Safety test" begin include("thread_safety.jl") end
         @time @safetestset "A + B <--> C" begin include("reversible_binding.jl") end
