@@ -28,7 +28,7 @@ rng = StableRNG(12345)
         dprob = DiscreteProblem(u0, tspan)
         
         # Run ensembles for statistics
-        n_traj = 1000
+        n_traj = 4000
         dt = .001
 
         # Direct method reference
@@ -72,8 +72,8 @@ rng = StableRNG(12345)
                           EnsembleThreads(); trajectories=n_traj, saveat=tspan[2]/100)
         
         # SimpleSplitTauLeaping
-        jprob_split = JumpProblem(dprob, PureLeaping(), ma_jumps)
-        sol_split = run_split_ensemble(jprob_split, n_traj, 0.0001, 54321)
+        jprob_split = JumpProblem(dprob, PureLeaping(), ma_jumps; rng)
+        sol_split = run_split_ensemble(jprob_split, n_traj, 0.0001)
         
         # Compare means of all species at final time
         for species in 1:3
@@ -111,28 +111,26 @@ rng = StableRNG(12345)
         dprob = DiscreteProblem(u0, tspan)
         
         n_traj = 100
+        saveat = [5.0, 10.0, 15.0, 20.0]
         
         # Direct
         jprob_direct = JumpProblem(dprob, ma_jumps; rng, save_positions = (false, false))
         ensembleprob_direct = EnsembleProblem(jprob_direct)
-        sol_direct = solve(ensembleprob_direct, SSAStepper(); trajectories=n_traj, 
-            saveat=tspan[2]/100)
+        sol_direct = solve(ensembleprob_direct, SSAStepper(); trajectories=n_traj, saveat)
         
         # SimpleSplitTauLeaping with very small dt for accuracy
         jprob_split = JumpProblem(dprob, PureLeaping(), ma_jumps)
-        sol_split = run_split_ensemble(jprob_split, n_traj, 0.0001, 99999)
+        sol_split = run_split_ensemble(jprob_split, n_traj, 0.0001)
         
         # Sample at multiple time points
-        test_times = [5.0, 10.0, 15.0, 20.0]
-        for test_t in test_times
+        for test_t in saveat
             # Find closest time index
-            t_idx_direct = findfirst(t -> t >= test_t, sol_direct[1].t)
+            t_idx_direct = findfirst(t -> t >= test_t, sol_direct.u[1].t)
             t_idx_split = findfirst(t -> t >= test_t, sol_split[1].t)
             
             for species in 1:2
-                direct_vals = [sol.u[t_idx_direct][species] for sol in sol_direct]
+                direct_vals = [sol(test_t; idxs = species) for sol in sol_direct]
                 split_vals = [sol.u[t_idx_split][species] for sol in sol_split]
-                
                 @test mean(split_vals) ≈ mean(direct_vals) rtol=0.05
             end
         end
