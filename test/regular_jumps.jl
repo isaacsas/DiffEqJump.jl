@@ -214,12 +214,10 @@ end
         @test sol_boundaries.t[1] == tspan[1]
         @test sol_boundaries.t[end] == tspan[2]
         
-        # Test saveat before start time (should save initial condition)
+        # Test that saveat outside tspan bounds throws an error
         early_times = [tspan[1] - 1.0, tspan[1] - 0.5, 2.0]
-        sol_early = solve(jump_prob, SimpleTauLeaping(); dt=dt, saveat=early_times,
-                         save_everystep=false, save_start=false)
-        @test length(sol_early.t) >= 3  # 2 early times + 1 valid + end
-        @test any(sol_early.t .<= tspan[1])
+        @test_throws ErrorException solve(jump_prob, SimpleTauLeaping(); dt=dt, saveat=early_times,
+                                        save_everystep=false, save_start=false)
         
         # Test empty saveat
         sol_empty = solve(jump_prob, SimpleTauLeaping(); dt=dt, saveat=Float64[])

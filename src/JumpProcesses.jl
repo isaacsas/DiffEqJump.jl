@@ -128,6 +128,7 @@ include("SSA_stepper.jl")
 export SSAStepper
 
 # leaping: 
+include("tau_leaping_saving.jl")
 include("simple_regular_solve.jl")
 export SimpleTauLeaping, EnsembleGPUKernel
 
