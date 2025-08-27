@@ -22,11 +22,11 @@ function validate_pure_leaping_inputs(jump_prob::JumpProblem, alg)
 end
 
 function get_next_time(t_current, dt, regular_grid_next, saveat_times, 
-                       saveat_idx, tspan_end, save_everystep, dtmin)
+                       saveat_idx, tspan_end, dtmin)
     next_time = tspan_end
     
-    # Check next regular grid point if saving every step
-    if save_everystep && regular_grid_next < tspan_end
+    # Always check next regular grid point (for numerical accuracy)
+    if regular_grid_next < tspan_end
         next_time = min(next_time, regular_grid_next)
     end
     
@@ -48,7 +48,7 @@ function DiffEqBase.solve(jump_prob::JumpProblem, alg::SimpleTauLeaping;
         save_everystep = isempty(saveat),  # note isempty(scalar) == false in Julia!
         save_start = save_everystep || isempty(saveat) || saveat isa Number ? true : jump_prob.prob.tspan[1] in saveat,
         save_end = save_everystep || isempty(saveat) || saveat isa Number ? true : jump_prob.prob.tspan[2] in saveat,
-        dtmin = nothing)
+        dtmin = max(dt / 10^10, eps(dt)) )
 
     # validation
     validate_pure_leaping_inputs(jump_prob, alg) ||
@@ -66,11 +66,6 @@ function DiffEqBase.solve(jump_prob::JumpProblem, alg::SimpleTauLeaping;
     du = similar(u0)
     rate_cache = zeros(float(eltype(u0)), numjumps)
 
-    # Set default dtmin if not provided
-    if dtmin === nothing
-        dtmin = dt / 1e10
-    end
-
     # solution output arrays
     t_vals = typeof(tspan[1])[]
     u_vals = typeof(u0)[]
@@ -85,6 +80,11 @@ function DiffEqBase.solve(jump_prob::JumpProblem, alg::SimpleTauLeaping;
     else
         saveat_times = copy(saveat)
         !issorted(saveat_times) && sort!(saveat_times)
+        
+        # Validate that all saveat times are within tspan bounds
+        if !isempty(saveat_times) && (saveat_times[1] < tspan[1] || saveat_times[end] > tspan[2])
+            error("All saveat times must be within the time span [$(tspan[1]), $(tspan[2])]")
+        end
     end
     
     # Handle save_start and save_end precedence over saveat
@@ -142,7 +142,7 @@ function DiffEqBase.solve(jump_prob::JumpProblem, alg::SimpleTauLeaping;
     while t < tspan[2] - dtmin
         # Determine next time point
         tnext = get_next_time(t, dt, regular_grid_next, saveat_times, 
-                             saveat_idx, tspan[2], save_everystep, dtmin)
+                             saveat_idx, tspan[2], dtmin)
         current_dt = tnext - t
         
         # Skip negligible steps
@@ -158,17 +158,21 @@ function DiffEqBase.solve(jump_prob::JumpProblem, alg::SimpleTauLeaping;
         u = du + u
         t = tnext
         
+        # Update regular grid tracker (always advance regardless of saving)
+        if abs(t - regular_grid_next) < dtmin
+            regular_grid_next += dt
+        end
+        
         # Unified saving logic
         should_save = false
         
-        # Check if at regular grid point
-        if save_everystep && abs(t - regular_grid_next) < dtmin
+        # Check if at regular grid point and save_everystep is true
+        if save_everystep && abs(t - (regular_grid_next - dt)) < dtmin
             # Don't save end time if save_end=false
             is_end_time = abs(t - tspan[2]) < dtmin
             if !(is_end_time && !save_end)
                 should_save = true
             end
-            regular_grid_next += dt
         end
         
         # Check if at saveat point
