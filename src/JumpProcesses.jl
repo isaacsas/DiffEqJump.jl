@@ -5,7 +5,7 @@ using Reexport: Reexport, @reexport
 
 # Explicit imports from standard libraries
 using LinearAlgebra: LinearAlgebra, I, mul!
-using Random: Random, randexp, randexp!
+using Random: Random, randexp, randexp!, seed!
 
 # Explicit imports from external packages
 using DocStringExtensions: DocStringExtensions, FIELDS, TYPEDEF
@@ -37,7 +37,7 @@ using DiffEqBase: DiffEqBase, CallbackSet, ContinuousCallback, DAEFunction,
                   DDEFunction, DiscreteProblem, ODEFunction, ODEProblem,
                   ODESolution, ReturnCode, SDEFunction, SDEProblem, add_tstop!,
                   deleteat!, isinplace, remake, savevalues!, step!,
-                  u_modified!
+                  u_modified!, prob2dtmin
 using SciMLBase: SciMLBase, DEIntegrator
 
 abstract type AbstractJump end

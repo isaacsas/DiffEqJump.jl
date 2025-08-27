@@ -160,11 +160,11 @@ end
     end
     
     @testset "saveat functionality" begin
-        # Test saveat as array
+        # Test saveat as array (new behavior: boundaries not added unless in saveat)
         saveat_times = [1.0, 3.0, 5.0, 7.0]
         sol_saveat = solve(jump_prob, SimpleTauLeaping(); dt=dt, saveat=saveat_times, 
                           save_everystep=false)
-        @test length(sol_saveat.t) >= length(saveat_times) + 2  # saveat + start + end
+        @test length(sol_saveat.t) == length(saveat_times)  # Only saveat times (no boundaries)
         for save_t in saveat_times
             @test any(abs.(sol_saveat.t .- save_t) .< dt/1e10)
         end
@@ -177,7 +177,7 @@ end
         @test length(sol_saveat_range.t) >= length(expected_saves)
         
         # Test saveat with save_everystep=true (should include both)
-        sol_both = solve(jump_prob, SimpleTauLeaping(); dt=dt, saveat=[2.5, 7.5])
+        sol_both = solve(jump_prob, SimpleTauLeaping(); dt=dt, saveat=[2.5, 7.5], save_everystep=true)
         regular_times = tspan[1]:dt:tspan[2]
         # Should have regular grid points plus saveat points
         @test length(sol_both.t) >= length(regular_times)
@@ -188,13 +188,13 @@ end
     @testset "Edge cases and floating point handling" begin
         # Test saveat exactly at regular grid points
         regular_grid = collect(tspan[1]:dt:tspan[2])
-        sol_exact = solve(jump_prob, SimpleTauLeaping(); dt=dt, saveat=regular_grid[3:5])
+        sol_exact = solve(jump_prob, SimpleTauLeaping(); dt=dt, saveat=regular_grid[3:5], save_everystep=true)
         # Should not have duplicate times
         @test length(sol_exact.t) == length(unique(sol_exact.t))
         
         # Test saveat slightly offset from grid
         offset_times = regular_grid[2:4] .+ dt/1e12  # Very small offset
-        sol_offset = solve(jump_prob, SimpleTauLeaping(); dt=dt, saveat=offset_times)
+        sol_offset = solve(jump_prob, SimpleTauLeaping(); dt=dt, saveat=offset_times, save_everystep=true)
         # Should merge with regular grid due to dtmin tolerance
         regular_sol = solve(jump_prob, SimpleTauLeaping(); dt=dt)
         @test length(sol_offset.t) == length(regular_sol.t)
@@ -203,7 +203,7 @@ end
         large_dtmin = dt/100
         offset_times_large = regular_grid[2:4] .+ large_dtmin/2
         sol_custom_dtmin = solve(jump_prob, SimpleTauLeaping(); dt=dt, 
-                                saveat=offset_times_large, dtmin=large_dtmin)
+                                saveat=offset_times_large, dtmin=large_dtmin, save_everystep=true)
         # Should merge due to larger tolerance
         @test length(sol_custom_dtmin.t) == length(regular_sol.t)
         
@@ -234,7 +234,7 @@ end
         
         sol_default = solve(jump_prob1, SimpleTauLeaping(); dt=dt)
         sol_all_saves = solve(jump_prob2, SimpleTauLeaping(); dt=dt, 
-                             saveat=collect(tspan[1]:dt:tspan[2]))
+                             saveat=collect(tspan[1]:dt:tspan[2]), save_everystep=true)
         
         # Should have same number of time points
         @test length(sol_default.t) == length(sol_all_saves.t)
@@ -257,6 +257,23 @@ end
                            save_everystep=false, saveat=[2.0, 4.0, 6.0])
         @test length(sol_combined.t) == 3  # Only saveat points
         @test all(t -> t in [2.0, 4.0, 6.0], sol_combined.t)
+        
+        # Test explicit save_end=true overrides smart default
+        sol_explicit_end = solve(jump_prob, SimpleTauLeaping(); dt=dt, 
+                                saveat=[1.0, 3.0], save_end=true, save_everystep=false)
+        @test length(sol_explicit_end.t) == 3  # [1.0, 3.0, 10.0] (start not in saveat)
+        @test any(abs.(sol_explicit_end.t .- 1.0) .< dt/1e10)  # saveat point
+        @test any(abs.(sol_explicit_end.t .- 3.0) .< dt/1e10)  # saveat point  
+        @test any(abs.(sol_explicit_end.t .- tspan[2]) .< dt/1e10)  # end time added by explicit save_end=true
+        @test !any(abs.(sol_explicit_end.t .- tspan[1]) .< dt/1e10)  # start NOT added (not in saveat)
+        
+        # Test explicit save_start=true overrides smart default
+        sol_explicit_start = solve(jump_prob, SimpleTauLeaping(); dt=dt,
+                                  saveat=[5.0, 7.0], save_start=true, save_everystep=false)
+        @test length(sol_explicit_start.t) == 3  # [0.0, 5.0, 7.0]
+        @test any(abs.(sol_explicit_start.t .- 5.0) .< dt/1e10)  # saveat point
+        @test any(abs.(sol_explicit_start.t .- 7.0) .< dt/1e10)  # saveat point
+        @test any(abs.(sol_explicit_start.t .- tspan[1]) .< dt/1e10)  # start time added
         
         # Test precedence: saveat should override regular grid when coincident
         saveat_at_grid = [2.0, 4.0]  # Assuming these align with regular grid
