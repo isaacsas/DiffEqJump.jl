@@ -79,6 +79,7 @@ function DiffEqBase.solve(jump_prob::JumpProblem, alg::SimpleTauLeaping;
         current_dt = tnext - t
         
         # Skip negligible steps
+        # THIS IS A BUG!!!
         if current_dt < dtmin
             continue
         end
@@ -88,7 +89,7 @@ function DiffEqBase.solve(jump_prob::JumpProblem, alg::SimpleTauLeaping;
         rate_cache .*= current_dt # multiply by the width of the time interval
         counts .= pois_rand.((rng,), rate_cache) # set counts to the poisson arrivals with our given rates
         affects!(du, u, p, t, counts, nothing)
-        u = du + u
+        u .+= du 
         t = tnext
         
         # Update regular grid tracker (always advance regardless of saving)
@@ -108,7 +109,7 @@ function DiffEqBase.solve(jump_prob::JumpProblem, alg::SimpleTauLeaping;
         rate_cache .*= final_dt
         counts .= pois_rand.((rng,), rate_cache)
         affects!(du, u, p, t, counts, mark)
-        u = du + u
+        u .+= du 
         t = tspan[2]
     end
     
