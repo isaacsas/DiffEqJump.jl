@@ -10,6 +10,7 @@ Mutable struct to hold all saving-related data and state for tau-leaping algorit
 - `t_vals::Vector{T}`: Storage for time points
 - `u_vals::Vector{U}`: Storage for state values  
 - `saveat_times::Vector{T}`: Unified vector of all save times
+- `use_saveat::Bool`: Whether saveat times are being used
 - `save_everystep::Bool`: Whether to save every step
 - `save_start::Bool`: Whether to save initial condition
 - `save_end::Bool`: Whether to save final condition
@@ -22,6 +23,7 @@ mutable struct TauLeapingSaveData{T, U}
     
     # Save configuration
     saveat_times::Vector{T}
+    use_saveat::Bool
     save_everystep::Bool
     save_start::Bool  
     save_end::Bool
@@ -47,25 +49,26 @@ Initialize all saving-related data structures and parameters.
 # Returns
 - `TauLeapingSaveData`: Initialized saving data structure
 """
-function initialize_saving(prob, dt, dtmin; saveat=nothing, save_everystep=nothing, save_start=nothing, save_end=nothing)
-    tspan = prob.tspan
-    u0 = prob.u0
+function initialize_saving(prob, dt, dtmin, saveat, save_everystep, save_start, save_end)
+    @unpack tspan, u0 = prob
     
-    # Handle default kwargs
+    # Handle nothing values
     if saveat === nothing
         saveat = typeof(tspan[1])[]
     end
     
     if save_everystep === nothing
-        save_everystep = dt === nothing ? false : isempty(saveat)
+        save_everystep = isempty(saveat)
     end
-    
+          
     if save_start === nothing
-        save_start = save_everystep || isempty(saveat) || saveat isa Number ? true : tspan[1] in saveat
+        save_start = save_everystep || isempty(saveat) || 
+            saveat isa Number ? true : tspan[1] in saveat
     end
     
     if save_end === nothing  
-        save_end = save_everystep || isempty(saveat) || saveat isa Number ? true : tspan[2] in saveat
+        save_end = save_everystep || isempty(saveat) || 
+            saveat isa Number ? true : tspan[2] in saveat
     end
     
     # Preprocess and unify all save times
@@ -121,7 +124,10 @@ function initialize_saving(prob, dt, dtmin; saveat=nothing, save_everystep=nothi
     t_vals = typeof(tspan[1])[]
     u_vals = typeof(u0)[]
     
-    return TauLeapingSaveData(t_vals, u_vals, saveat_times, save_everystep, save_start, save_end, 1)
+    # Set use_saveat flag
+    use_saveat = !isempty(saveat_times)
+    
+    return TauLeapingSaveData(t_vals, u_vals, saveat_times, use_saveat, save_everystep, save_start, save_end, 1)
 end
 
 """
@@ -141,7 +147,7 @@ function initial_save!(save_data::TauLeapingSaveData, u0, t0)
     dtmin = eps(typeof(t0)) * 100  # Small tolerance for time comparisons
     
     # Save all saveat times at or before initial time (with initial condition)
-    while !isempty(save_data.saveat_times) && save_data.saveat_idx <= length(save_data.saveat_times) &&
+    while save_data.use_saveat && save_data.saveat_idx <= length(save_data.saveat_times) &&
           save_data.saveat_times[save_data.saveat_idx] <= t0 + dtmin
         push!(save_data.t_vals, save_data.saveat_times[save_data.saveat_idx])
         push!(save_data.u_vals, copy(u0))
@@ -179,7 +185,7 @@ function check_and_save!(save_data::TauLeapingSaveData, u, t, dt, dtmin, regular
     should_save_saveat = false
     
     # Check if current time matches a saveat point
-    if !isempty(save_data.saveat_times) && save_data.saveat_idx <= length(save_data.saveat_times)
+    if save_data.use_saveat && save_data.saveat_idx <= length(save_data.saveat_times)
         saveat_t = save_data.saveat_times[save_data.saveat_idx]
         if abs(t - saveat_t) <= dtmin
             should_save_saveat = true
@@ -224,7 +230,7 @@ using the final state for all remaining save points.
 """
 function finalize_saving!(save_data::TauLeapingSaveData, u_final, t_final, dtmin)
     # Save any remaining saveat times (including final time if save_end was added)
-    while !isempty(save_data.saveat_times) && save_data.saveat_idx <= length(save_data.saveat_times)
+    while save_data.use_saveat && save_data.saveat_idx <= length(save_data.saveat_times)
         saveat_t = save_data.saveat_times[save_data.saveat_idx]
         # Only save if the saveat time is at or after current time
         if saveat_t >= t_final - dtmin

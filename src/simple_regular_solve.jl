@@ -21,21 +21,16 @@ function validate_pure_leaping_inputs(jump_prob::JumpProblem, alg)
     return isvalid
 end
 
-function get_next_time(t_current, dt, regular_grid_next, saveat_times, 
-                       saveat_idx, tspan_end, dtmin)
+function get_next_time(t_mesh, save_data, tspan_end)
     next_time = tspan_end
     
     # Always check next regular grid point (for numerical accuracy)
-    if regular_grid_next < tspan_end
-        next_time = min(next_time, regular_grid_next)
-    end
+    (t_mesh < tspan_end) && (next_time = t_mesh)
     
     # Check next saveat point if exists
-    if !isempty(saveat_times) && saveat_idx <= length(saveat_times)
-        saveat_t = saveat_times[saveat_idx]
-        if saveat_t > t_current && saveat_t <= tspan_end
-            next_time = min(next_time, saveat_t)
-        end
+    @unpack use_saveat, saveat_idx, saveat_times = save_data
+    if use_saveat && saveat_idx <= length(saveat_times)
+        next_time = min(next_time, saveat_times[saveat_idx])
     end
     
     return next_time
@@ -57,21 +52,20 @@ function DiffEqBase.solve(jump_prob::JumpProblem, alg::SimpleTauLeaping;
     rj = jump_prob.regular_jump
     @unpack rate, numjumps = rj    
     affects! = rj.c
-    prob = jump_prob.prob
-    @unpack tspan, p = prob
-    rng = jump_prob.rng
+    @unpack prob, rng = jump_prob
     (seed !== nothing) && seed!(rng, seed)
+    @unpack tspan, p = prob
     u0 = copy(prob.u0)
     u = copy(u0)
     du = similar(u0)
-    rate_cache = zeros(float(eltype(u0)), numjumps)
+    rate_cache = zeros(typeof(dt), numjumps)
 
     # Initialize time variables
     t = tspan[1]
-    regular_grid_next = t + dt
+    t_mesh = t + dt
 
     # setup saving
-    save_data = initialize_saving(prob, dt, dtmin; saveat, save_everystep, save_start, 
+    save_data = initialize_saving(prob, dt, dtmin, saveat, save_everystep, save_start, 
         save_end)
     initial_save!(save_data, u, t)
 
@@ -81,8 +75,7 @@ function DiffEqBase.solve(jump_prob::JumpProblem, alg::SimpleTauLeaping;
     # Main time-stepping loop
     while t < tspan[2] - dtmin
         # Determine next time point
-        tnext = get_next_time(t, dt, regular_grid_next, save_data.saveat_times, 
-                             save_data.saveat_idx, tspan[2], dtmin)
+        tnext = get_next_time(t_mesh, save_data, tspan[2])
         current_dt = tnext - t
         
         # Skip negligible steps
@@ -99,12 +92,12 @@ function DiffEqBase.solve(jump_prob::JumpProblem, alg::SimpleTauLeaping;
         t = tnext
         
         # Update regular grid tracker (always advance regardless of saving)
-        if abs(t - regular_grid_next) < dtmin
-            regular_grid_next += dt
+        if abs(t - t_mesh) < dtmin
+            t_mesh += dt
         end
         
         # Handle saving using new API
-        check_and_save!(save_data, u, t, dt, dtmin, regular_grid_next, tspan[2])
+        check_and_save!(save_data, u, t, dt, dtmin, t_mesh, tspan[2])
     end
 
     # Handle final step if not reached exactly

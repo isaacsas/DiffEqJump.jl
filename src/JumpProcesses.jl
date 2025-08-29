@@ -37,7 +37,7 @@ using DiffEqBase: DiffEqBase, CallbackSet, ContinuousCallback, DAEFunction,
                   DDEFunction, DiscreteProblem, ODEFunction, ODEProblem,
                   ODESolution, ReturnCode, SDEFunction, SDEProblem, add_tstop!,
                   deleteat!, isinplace, remake, savevalues!, step!,
-                  u_modified!, prob2dtmin
+                  u_modified!
 using SciMLBase: SciMLBase, DEIntegrator
 
 abstract type AbstractJump end
