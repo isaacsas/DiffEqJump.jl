@@ -1,7 +1,7 @@
 name = "JumpProcesses"
 uuid = "ccbc3e58-028d-4f4c-8cd5-9ae44345cda5"
 authors = ["Chris Rackauckas <accounts@chrisrackauckas.com>"]
-version = "9.23.3"
+version = "9.25.0"
 
 [deps]
 ArrayInterface = "4fba245c-0d91-5ea0-9b3e-6abc04ee57a9"
@@ -22,7 +22,6 @@ SymbolicIndexingInterface = "2efcf032-c050-4f8e-a9bb-153293bab1f5"
 
 [weakdeps]
 Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
-FastBroadcast = "7034ab61-46d4-4ed7-9d0f-46aef9175898"
 KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
 OrdinaryDiffEqCore = "bbf590c4-e513-4bbe-9b18-05decba2e5d8"
 
@@ -40,7 +39,7 @@ DiffEqBase = "6.192"
 DiffEqCallbacks = "4.7"
 DocStringExtensions = "0.9"
 ExplicitImports = "1"
-FastBroadcast = "0.3"
+FastBroadcast = "0.3, 1"
 FunctionWrappers = "1.1"
 Graphs = "1.11"
 KernelAbstractions = "0.9"
@@ -51,7 +50,7 @@ OrdinaryDiffEqCore = "3"
 Pkg = "1"
 PoissonRandom = "0.4"
 Random = "1"
-RecursiveArrayTools = "3.35"
+RecursiveArrayTools = "3.35, 4"
 Reexport = "1.2"
 SafeTestsets = "0.1"
 SciMLBase = "2.147"
@@ -82,4 +81,4 @@ StochasticDiffEq = "789caeaf-c7a9-5a7d-9973-96adeb23e2a0"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["ADTypes", "Aqua", "ExplicitImports", "LinearAlgebra", "LinearSolve", "OrdinaryDiffEq", "Pkg", "SafeTestsets", "StableRNGs", "Statistics", "StochasticDiffEq", "Test", "FastBroadcast"]
+test = ["ADTypes", "Aqua", "ExplicitImports", "FastBroadcast", "LinearAlgebra", "LinearSolve", "OrdinaryDiffEq", "Pkg", "SafeTestsets", "StableRNGs", "Statistics", "StochasticDiffEq", "Test"]
