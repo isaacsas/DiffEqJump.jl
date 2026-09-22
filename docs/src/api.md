@@ -153,28 +153,35 @@ sol = solve(jprob, SSAStepper(); seed = 1234)
 
 ### Resolution priority
 
-When both `rng` and `seed` are passed to the same `solve`/`init` call, `rng`
-takes priority:
+For SSAStepper, OrdinaryDiffEq ODE/DAE solvers, SimpleTauLeaping, and
+SimpleExplicitTauLeaping, an explicit `rng` takes priority over `seed`:
 
 | User provides | Result |
 |---|---|
 | `rng` via `solve`/`init` | Uses that `rng` |
 | `seed` via `solve`/`init` | Creates `Xoshiro(seed)` |
-| Nothing | Uses `Random.default_rng()` (SSAStepper, ODE, tau-leaping) or a randomly-seeded `Xoshiro` (SDE) |
+| Nothing | Uses `Random.default_rng()` |
+
+StochasticDiffEq handles SDE/RODE RNGs for both `solve` and `init`. An explicit
+RNG other than `TaskLocalRNG` takes priority over seeds. With no RNG, or with
+`TaskLocalRNG`, a nonzero solve/init `seed` takes priority, followed by the
+underlying problem's nonzero `seed`; otherwise StochasticDiffEq creates a
+randomly seeded `Xoshiro`. It converts `TaskLocalRNG` to `Xoshiro` rather than
+storing it on the stochastic integrator. In this pathway, `seed=0` means no
+seed override, whereas SSAStepper and the ODE/DAE pathway use `Xoshiro(0)`.
 
 ### Behavior by solver pathway
 
 | Solver | Default RNG (nothing passed) | `rng` / `seed` support |
 |---|---|---|
 | `SSAStepper` | `Random.default_rng()` | Full support via `solve`/`init` kwargs |
-| ODE solvers (e.g., `Tsit5`) | `Random.default_rng()` | Full support via `solve`/`init` kwargs |
-| SDE solvers (e.g., `SRIW1`) | Randomly-seeded `Xoshiro` | Full support; `TaskLocalRNG` is auto-converted to `Xoshiro` |
+| OrdinaryDiffEq ODE/DAE solvers (e.g., `Tsit5`, `DFBDF`) | `Random.default_rng()` | Full support via `solve`/`init` kwargs |
+| StochasticDiffEq SDE/RODE solvers (e.g., `SRIW1`, `RandomEM`) | `Xoshiro` from the stored problem seed, or a random seed | Full support; `TaskLocalRNG` follows the seed policy above and is converted to `Xoshiro` |
 | `SimpleTauLeaping` | `Random.default_rng()` | Full support via `solve` kwargs |
 
 !!! note
     For reproducible simulations, always pass an explicit `rng` or `seed`.
-    The default RNG is shared global state and may produce different results
-    depending on prior usage.
+    Julia's default RNG is task-local; results may depend on prior draws in the task.
 
 # Private / Developer API
 
@@ -191,21 +198,32 @@ backends.
 | Solver type | `__solve` handled by | `__init` handled by | Uses `__jump_init`? |
 |---|---|---|---|
 | `SSAStepper` | JumpProcesses (`solve.jl`) | JumpProcesses (`SSA_stepper.jl`) | No |
-| ODE (e.g., `Tsit5`) | JumpProcesses (`solve.jl`) | JumpProcesses (`solve.jl`) → OrdinaryDiffEq | Yes |
-| SDE (e.g., `SRIW1`) | StochasticDiffEq | StochasticDiffEq | No |
+| OrdinaryDiffEq ODE/DAE (e.g., `Tsit5`, `DFBDF`) | JumpProcesses (`solve.jl`) | JumpProcesses' OrdinaryDiffEqCore extension → OrdinaryDiffEq | Yes |
+| StochasticDiffEq SDE/RODE (e.g., `SRIW1`, `RandomEM`) | StochasticDiffEqCore | JumpProcesses' OrdinaryDiffEqCore extension → StochasticDiffEqCore's JumpProblem initializer | No |
+| StochasticDiffEq jump algorithms (e.g., `TauLeaping`) | StochasticDiffEqCore | StochasticDiffEqCore's specialized jump-algorithm initializer | No |
 | `SimpleTauLeaping` | JumpProcesses (`simple_regular_solve.jl`, custom `DiffEqBase.solve`) | N/A | No |
 
 For **SSAStepper**, `rng` is resolved via `resolve_rng` in `SSA_stepper.jl`'s
 `__init` and stored on the [`SSAIntegrator`](@ref).
 
-For **ODE solvers**, `rng` is resolved via `resolve_rng` in `__jump_init`
+For **OrdinaryDiffEq ODE/DAE solvers**, `rng` is resolved via `resolve_rng` in `__jump_init`
 (`solve.jl`) and forwarded to OrdinaryDiffEq's `init`, which stores it on the
 `ODEIntegrator`.
 
-For **SDE solvers**, StochasticDiffEq handles the full solve/init pathway
-directly (JumpProcesses' ambiguity-fix `__solve` method is never dispatched to).
-StochasticDiffEq has its own `_resolve_rng` that additionally handles
-`TaskLocalRNG` conversion and the problem's stored seed.
+For **StochasticDiffEq SDE/RODE solvers**, the backend's more specific `__solve`
+handles solves. JumpProcesses' extension resolves the public `init` dispatch
+ambiguity by invoking the backend's existing initializer with the original
+JumpProblem and unchanged RNG/seed inputs. Both routes therefore use
+the backend's JumpProblem initializer, including its RNG policy, jump-state
+copying, and callback setup. Older supported StochasticDiffEqCore releases route
+`solve` through `__init` and therefore also use the extension. DiffEqBase merges
+stored problem keywords and user callbacks before dispatching `init`; the
+extension does not merge them a second time.
+
+An explicit legacy `alias_jump` passed to stochastic `init` retains its existing
+jump-copy override through the backend's `alias_jumps` field, preserving other
+alias settings. With that keyword omitted, the backend controls jump aliasing.
+This compatibility path does not change the alias API of SSAStepper or ODE solvers.
 
 For **tau-leaping**, JumpProcesses defines a custom `DiffEqBase.solve` that
 bypasses the standard `__solve`/`__init` pathway. It calls `resolve_rng`

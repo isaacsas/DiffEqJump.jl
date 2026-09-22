@@ -43,6 +43,7 @@ end
         @time @safetestset "Saveat Regression test" begin include("saveat_regression.jl") end
         @time @safetestset "Save_positions test" begin include("save_positions.jl") end
         @time @safetestset "RNG kwarg tests" begin include("rng_kwarg_tests.jl") end
+        @time @safetestset "Stochastic dispatch tests" begin include("stochastic_dispatch.jl") end
         @time @safetestset "Ensemble Uniqueness test" begin include("ensemble_uniqueness.jl") end
         @time @safetestset "Ensemble Problem Tests" begin include("ensemble_problems.jl") end
         @time @safetestset "A + B <--> C" begin include("reversible_binding.jl") end
