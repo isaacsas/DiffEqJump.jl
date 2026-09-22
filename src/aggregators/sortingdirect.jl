@@ -65,7 +65,7 @@ function aggregate(aggregator::SortingDirect, u, p, t, end_time, constant_jumps,
 end
 
 # set up a new simulation and calculate the first jump / jump time
-function initialize!(p::SortingDirectJumpAggregation, integrator, u, params, t)
+function initialize!(p::SortingDirectJumpAggregation, integrator, u, params, t::Number)
     p.end_time = integrator.sol.prob.tspan[2]
     fill_scaled_rates!(p.maj_rates, p.ma_jumps, params)
     fill_rates_and_sum!(p, u, params, t)

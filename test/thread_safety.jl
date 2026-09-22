@@ -1,4 +1,4 @@
-using DiffEqBase, Test
+using DiffEqBase, SciMLBase, Test
 using JumpProcesses, OrdinaryDiffEq, StochasticDiffEq
 
 sr = [1.0, 2.0, 50.0]
@@ -42,7 +42,7 @@ let
         prob = EnsembleProblem(jump_prob)
         sol = solve(prob, Tsit5(), EnsembleThreads(), trajectories = 400,
             save_everystep = false)
-        firstrx_time = [sol.u[i].t[findfirst(>(sol.u[i].t[1]), sol.u[i].t)] for i in 1:length(sol)]
+        firstrx_time = [sol.u[i].t[findfirst(>(sol.u[i].t[1]), sol.u[i].t)] for i in 1:length(sol.u)]
         @test allunique(firstrx_time)
     end
 end

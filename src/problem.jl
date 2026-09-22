@@ -1,5 +1,5 @@
 function isinplace_jump(p, rj)
-    if p isa DiscreteProblem && p.f === DiffEqBase.DISCRETE_INPLACE_DEFAULT &&
+    if p isa DiscreteProblem && p.f === SciMLBase.DISCRETE_INPLACE_DEFAULT &&
        rj !== nothing
         # Just a default discrete problem f, so don't use it for iip
         DiffEqBase.isinplace(rj)
@@ -52,7 +52,10 @@ $(FIELDS)
 ## Keyword Arguments
 
   - `save_positions=(true,true)` when including variable rates and `(false,true)` for constant
-    rates, specifies whether to save the system's state (before, after) the jump occurs.
+    rates, specifies whether to save the system's state (before, after) the jump occurs. **NOTE**,
+    this only controls saving for non-`VariableRateJump`s. `VariableRateJump` saving is controlled
+    at the individual jump level via the value of this kwarg passed to the individual `VariableRateJump`s
+    constructor when it is created.
   - `spatial_system`, for spatial problems the underlying spatial structure.
   - `hopping_constants`, for spatial problems the spatial transition rate coefficients.
   - `use_vrj_bounds = true`, set to false to disable handling bounded `VariableRateJump`s with
@@ -78,7 +81,7 @@ examples and commonly asked questions.
     ensemble interface.
 """
 mutable struct JumpProblem{iip, P, A, C, J <: Union{Nothing, AbstractJumpAggregator}, J1,
-        J2, J3, J4, K} <: DiffEqBase.AbstractJumpProblem{P, J}
+        J2, J3, J4, K} <: SciMLBase.AbstractJumpProblem{P, J}
     """The type of problem to couple the jumps to. For a pure jump process use `DiscreteProblem`, to couple to ODEs, `ODEProblem`, etc."""
     prob::P
     """The aggregator algorithm that determines the next jump times and types for `ConstantRateJump`s and `MassActionJump`s. Examples include `Direct`."""
@@ -116,7 +119,7 @@ function remake_extended_u0(prob, newu0)
     ExtendedJumpArray(newu0, jump_u)
 end
 
-Base.@pure remaker_of(prob::T) where {T <: JumpProblem} = DiffEqBase.parameterless_type(T)
+Base.@pure remaker_of(prob::T) where {T <: JumpProblem} = SciMLBase.parameterless_type(T)
 function DiffEqBase.remake(jprob::JumpProblem; u0 = missing, p = missing,
         interpret_symbolicmap = true, use_defaults = false, kwargs...)
     T = remaker_of(jprob)
@@ -228,7 +231,7 @@ make_kwarg(; kwargs...) = kwargs
 
 function JumpProblem(prob, aggregator::AbstractAggregatorAlgorithm, jumps::JumpSet;
         vr_aggregator::VariableRateAggregator = VR_FRM(),
-        save_positions = prob isa DiffEqBase.AbstractDiscreteProblem ?
+        save_positions = prob isa SciMLBase.AbstractDiscreteProblem ?
                          (false, true) : (true, true),
         spatial_system = nothing, hopping_constants = nothing,
         callback = nothing, tstops = nothing, use_vrj_bounds = true, kwargs...)
@@ -308,7 +311,7 @@ end
 
 # Special dispatch for PureLeaping aggregator - bypasses all aggregation
 function JumpProblem(prob, aggregator::PureLeaping, jumps::JumpSet;
-        save_positions = prob isa DiffEqBase.AbstractDiscreteProblem ?
+        save_positions = prob isa SciMLBase.AbstractDiscreteProblem ?
                          (false, true) : (true, true),
         spatial_system = nothing, hopping_constants = nothing,
         callback = nothing, tstops = nothing, kwargs...)

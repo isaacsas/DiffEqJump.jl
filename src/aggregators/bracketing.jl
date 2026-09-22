@@ -3,6 +3,38 @@
 #       large-scale reaction networks", Thanh et al, J. Chem. Phys., 2015
 # note, expects the type of the bracketing variables [ulow,uhigh] to be the
 # same as the fluct_rate and ushift.
+"""
+    BracketData(fluctrate, threshold, Δu)
+    BracketData{T1, T2}()
+
+Configure species-population brackets used by RSSA-based aggregators.
+
+For species population `u[i]`, the bracket is
+`[(1 - fluctrate) * u[i], (1 + fluctrate) * u[i]]` when `u[i] >= threshold`.
+For smaller populations, the bracket is `[max(u[i] - Δu, 0), u[i] + Δu]`.
+Each field may be either a scalar shared by all species or a vector indexed by species.
+
+## Fields
+
+  - `fluctrate`: Relative fluctuation width used for populations at or above `threshold`.
+  - `threshold`: Population threshold below which the absolute `Δu` bracket is used.
+  - `Δu`: Absolute bracket half-width used for populations below `threshold`.
+
+## Notes
+
+  - `BracketData{T1, T2}()` constructs `BracketData(T1(0.1), T2(25), T2(4))`.
+  - The bracketing rules follow the RSSA construction in Thanh et al., J. Chem. Phys. 142,
+    244106 (2015).
+
+## Examples
+
+```julia
+using JumpProcesses
+
+bd = BracketData(0.1, 25, 4)
+bd.fluctrate == 0.1
+```
+"""
 struct BracketData{T1, T2}
     fluctrate::T1         # interval should be [1-fluctrate,1+fluctrate] * u
     threshold::T2         # for u below threshold interval is:
@@ -15,14 +47,14 @@ BracketData{T1, T2}() where {T1, T2} = BracketData(T1(0.1), T2(25), T2(4))
 
 # support either vectors of data for each field, or scalars
 # Get fluctuation rate of species i.
-@inline getfr(bd::BracketData{AbstractVector{T1}, T2}, i) where {T1, T2} = bd.fluctrate[i]
+@inline getfr(bd::BracketData{T1, T2}, i) where {T1 <: AbstractVector, T2} = bd.fluctrate[i]
 @inline getfr(bd::BracketData{T1, T2}, i) where {T1 <: Number, T2} = bd.fluctrate
 
 # Get threshold value of species i.
-@inline gettv(bd::BracketData{T1, AbstractVector{T2}}, i) where {T1, T2} = bd.threshold[i]
+@inline gettv(bd::BracketData{T1, T2}, i) where {T1, T2 <: AbstractVector} = bd.threshold[i]
 @inline gettv(bd::BracketData{T1, T2}, i) where {T1, T2 <: Number} = bd.threshold
 
-@inline getΔu(bd::BracketData{T1, AbstractVector{T2}}, i) where {T1, T2} = bd.Δu[i]
+@inline getΔu(bd::BracketData{T1, T2}, i) where {T1, T2 <: AbstractVector} = bd.Δu[i]
 @inline getΔu(bd::BracketData{T1, T2}, i) where {T1, T2 <: Number} = bd.Δu
 
 @inline function delta_bracket(u::Integer, δ)
@@ -51,25 +83,16 @@ end
     evalrxrate(ulow, k, majumps, maj_rates), evalrxrate(uhigh, k, majumps, maj_rates)
 end
 
-# for constant rate jumps we must check the ordering of the bracket values
-# Get propensity brackets of constant rate jump.
-@inline function get_cjump_brackets(ulow, uhigh, rate, params, t)
-    rlow = rate(ulow, params, t)
-    rhigh = rate(uhigh, params, t)
-    return (rlow <= rhigh) ? (rlow, rhigh) : (rhigh, rlow)
-end
-
 """
 get brackets for the rate of reaction rx by first checking if the reaction is a massaction reaction
 """
-@inline function get_jump_brackets(rx, p::AbstractSSAJumpAggregator, params, t)
+@inline function get_jump_brackets(rx, p::AbstractSSAJumpAggregator, u, params, t)
     ma_jumps = p.ma_jumps
     num_majumps = get_num_majumps(ma_jumps)
     if rx <= num_majumps
         return get_majump_brackets(p.ulow, p.uhigh, rx, ma_jumps, p.maj_rates)
     else
-        @inbounds return get_cjump_brackets(p.ulow, p.uhigh, p.rates[rx - num_majumps],
-            params, t)
+        @inbounds return p.brackets[rx - num_majumps](p.ulow, p.uhigh, u, params, t)
     end
 end
 
@@ -97,31 +120,34 @@ end
 end
 
 # Set up bracketing. The aggregator must have fields
-#    ulow, uhigh, cur_rate_low, cur_rate_high, sum_rate, ma_jumps, rates.
+#    ulow, uhigh, cur_rate_low, cur_rate_high, sum_rate, ma_jumps, rates, brackets
 function set_bracketing!(p::AbstractSSAJumpAggregator, u, params, t)
     # species bracketing interval
     update_u_brackets!(p, u)
 
     # reaction rate bracketing interval
-    # mass action jumps
     sum_rate = zero(p.sum_rate)
-    majumps = p.ma_jumps
-    crlow = p.cur_rate_low
-    crhigh = p.cur_rate_high
-    maj_rates = p.maj_rates
-    @inbounds for k in 1:get_num_majumps(majumps)
-        crlow[k], crhigh[k] = get_majump_brackets(p.ulow, p.uhigh, k, majumps, maj_rates)
-        sum_rate += crhigh[k]
-    end
-
-    # constant rate jumps
-    k = get_num_majumps(majumps) + 1
-    @inbounds for rate in p.rates
-        crlow[k], crhigh[k] = get_cjump_brackets(p.ulow, p.uhigh, rate, params, t)
-        sum_rate += crhigh[k]
-        k += 1
+    @inbounds for rx in 1:(get_num_majumps(p.ma_jumps) + length(p.brackets))
+        p.cur_rate_low[rx], p.cur_rate_high[rx] = get_jump_brackets(rx, p, u, params, t)
+        sum_rate += p.cur_rate_high[rx]
     end
     p.sum_rate = sum_rate
 
+    validate_brackets(p, u, params, t)
+
+    nothing
+end
+
+function validate_brackets(p::AbstractSSAJumpAggregator, u, params, t)
+    num_majumps = get_num_majumps(p.ma_jumps)
+    @inbounds for rx in 1:(num_majumps + length(p.brackets))
+        lrate, urate = p.cur_rate_low[rx], p.cur_rate_high[rx]
+        (zero(lrate) <= lrate <= urate < Inf) ||
+            error("Invalid rate bounds for jump $rx: expected 0 <= lrate <= urate < Inf, got ($lrate, $urate).")
+        rate = calculate_jump_rate(p.ma_jumps, num_majumps, p.rates, u, params, t, rx,
+            p.maj_rates)
+        (lrate <= rate <= urate) ||
+            error("Rate bounds for jump $rx do not bracket the rate at the initial state: $rate ∉ [$lrate, $urate].")
+    end
     nothing
 end

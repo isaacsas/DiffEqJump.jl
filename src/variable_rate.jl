@@ -72,11 +72,11 @@ function extend_u0(prob, Njumps)
     return u0
 end
 
-function extend_problem(prob::DiffEqBase.AbstractDiscreteProblem, jumps)
+function extend_problem(prob::SciMLBase.AbstractDiscreteProblem, jumps)
     error("General `VariableRateJump`s require a continuous problem, like an ODE/SDE/DDE/DAE problem. To use a `DiscreteProblem` bounded `VariableRateJump`s must be used. See the JumpProcesses docs.")
 end
 
-function extend_problem(prob::DiffEqBase.AbstractODEProblem, jumps)
+function extend_problem(prob::SciMLBase.AbstractODEProblem, jumps)
     _f = SciMLBase.unwrapped_f(prob.f)
 
     if isinplace(prob)
@@ -102,7 +102,7 @@ function extend_problem(prob::DiffEqBase.AbstractODEProblem, jumps)
     remake(prob; f, u0)
 end
 
-function extend_problem(prob::DiffEqBase.AbstractSDEProblem, jumps)
+function extend_problem(prob::SciMLBase.AbstractSDEProblem, jumps)
     _f = SciMLBase.unwrapped_f(prob.f)
 
     if isinplace(prob)
@@ -138,7 +138,7 @@ function extend_problem(prob::DiffEqBase.AbstractSDEProblem, jumps)
     remake(prob; f, g = jump_g, u0)
 end
 
-function extend_problem(prob::DiffEqBase.AbstractDDEProblem, jumps)
+function extend_problem(prob::SciMLBase.AbstractDDEProblem, jumps)
     _f = SciMLBase.unwrapped_f(prob.f)
 
     if isinplace(prob)
@@ -165,7 +165,7 @@ function extend_problem(prob::DiffEqBase.AbstractDDEProblem, jumps)
 end
 
 # Not sure if the DAE one is correct: Should be a residual of sorts
-function extend_problem(prob::DiffEqBase.AbstractDAEProblem, jumps)
+function extend_problem(prob::SciMLBase.AbstractDAEProblem, jumps)
     _f = SciMLBase.unwrapped_f(prob.f)
 
     if isinplace(prob)
@@ -211,7 +211,7 @@ end
 function (c::VR_FRMEventCallback)(cb, u, t, integrator)
     rng = get_rng(integrator)
     integrator.u.jump_u[c.idx] = -randexp(rng, typeof(integrator.t))
-    u_modified!(integrator, true)
+    derivative_discontinuity!(integrator, true)
     nothing
 end
 
@@ -295,6 +295,42 @@ sol = solve(jprob, Tsit5())
   - `VR_Direct` and `VR_DirectFW` are expected to generally be more performant than `VR_FRM`.
 """
 struct VR_Direct <: VariableRateAggregator end
+"""
+$(TYPEDEF)
+
+Function-wrapper variant of [`VR_Direct`](@ref) for simulations with many
+[`VariableRateJump`](@ref)s.
+
+`VR_DirectFW` uses the same direct-method callback strategy as `VR_Direct`, but stores the
+rate and affect functions in `FunctionWrappers`-based containers.
+
+## Returns
+
+  - A stateless [`VariableRateAggregator`](@ref) value for the `vr_aggregator` keyword of
+    [`JumpProblem`](@ref).
+
+## Examples
+
+```julia
+using JumpProcesses, OrdinaryDiffEq
+
+u0 = [1.0]
+p = [10.0, 0.5]
+tspan = (0.0, 10.0)
+
+birth_rate(u, p, t) = p[1]
+birth_affect!(integrator) = (integrator.u[1] += 1; nothing)
+birth_jump = VariableRateJump(birth_rate, birth_affect!)
+
+death_rate(u, p, t) = p[2] * u[1]
+death_affect!(integrator) = (integrator.u[1] -= 1; nothing)
+death_jump = VariableRateJump(death_rate, death_affect!)
+
+oprob = ODEProblem((du, u, p, t) -> du .= 0, u0, tspan, p)
+jprob = JumpProblem(oprob, birth_jump, death_jump; vr_aggregator = VR_DirectFW())
+sol = solve(jprob, Tsit5())
+```
+"""
 struct VR_DirectFW <: VariableRateAggregator end
 
 mutable struct VR_DirectEventCache{T, F1, F2}
@@ -370,7 +406,7 @@ end
 function initialize_vr_direct_wrapper(cb::ContinuousCallback, u, t, integrator)
     concretize_vr_direct_affects!(cb.condition, integrator)
     initialize_vr_direct_cache!(cb.condition, u, t, integrator)
-    u_modified!(integrator, false)
+    derivative_discontinuity!(integrator, false)
     nothing
 end
 

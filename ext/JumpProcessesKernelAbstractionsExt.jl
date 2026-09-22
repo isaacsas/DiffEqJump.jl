@@ -5,6 +5,9 @@ using KernelAbstractions, Adapt
 using StaticArrays
 using PoissonRandom, Random
 
+include("ssa_stepper.jl")
+include("explicit_tau_leaping.jl")
+
 function SciMLBase.__solve(ensembleprob::SciMLBase.AbstractEnsembleProblem,
         alg::SimpleTauLeaping,
         ensemblealg::EnsembleGPUKernel;
@@ -23,7 +26,7 @@ function SciMLBase.__solve(ensembleprob::SciMLBase.AbstractEnsembleProblem,
     jump_prob = ensembleprob.prob
 
     # Validate that this is a PureLeaping JumpProblem
-    validate_pure_leaping_inputs(jump_prob, alg) ||
+    JumpProcesses.validate_pure_leaping_inputs(jump_prob, alg) ||
         error("SimpleTauLeaping can only be used with PureLeaping JumpProblems with only non-RegularJumps.")
     prob = jump_prob.prob
 

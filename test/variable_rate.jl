@@ -1,4 +1,4 @@
-using DiffEqBase, JumpProcesses, OrdinaryDiffEq, StochasticDiffEq, Test
+using DiffEqBase, JumpProcesses, OrdinaryDiffEq, SciMLBase, StochasticDiffEq, Test
 using Random, LinearSolve, Statistics
 using StableRNGs, ADTypes
 rng = StableRNG(12345)
@@ -36,13 +36,31 @@ sol = solve(jump_prob, Tsit5(); rng)
 sol = solve(jump_prob, Rosenbrock23(autodiff = AutoFiniteDiff()); rng)
 sol = solve(jump_prob, Rosenbrock23(); rng)
 
+function vrfrm_trajectory(default_seed)
+    task = @task begin
+        Random.seed!(default_seed)
+        local_rng = StableRNG(12345)
+        ode_prob = ODEProblem((du, u, p, t) -> fill!(du, 0), [0.0], (0.0, 1.0))
+        jump1 = VariableRateJump((u, p, t) -> 1.0,
+            integrator -> (integrator.u[1] += 1))
+        jump2 = VariableRateJump((u, p, t) -> 10.0,
+            integrator -> (integrator.u[1] += 1))
+        jump_prob = JumpProblem(ode_prob, jump1, jump2; vr_aggregator = VR_FRM())
+        solve(jump_prob, Tsit5(); saveat = 0.0:0.05:1.0, rng = local_rng).u
+    end
+    schedule(task)
+    return fetch(task)
+end
+
+@test vrfrm_trajectory(123) == vrfrm_trajectory(456)
+
 jump_prob_gill = JumpProblem(prob, jump, jump2; vr_aggregator = VR_Direct())
 integrator = init(jump_prob_gill, Tsit5(); rng)
 sol_gill = solve(jump_prob_gill, Tsit5(); rng)
 sol_gill = solve(jump_prob, Rosenbrock23(autodiff = AutoFiniteDiff()))
 sol_gill = solve(jump_prob, Rosenbrock23())
-@test maximum([sol.u[i][2] for i in 1:length(sol)]) <= 1e-12
-@test maximum([sol.u[i][3] for i in 1:length(sol)]) <= 1e-12
+@test maximum([sol.u[i][2] for i in 1:length(sol.u)]) <= 1e-12
+@test maximum([sol.u[i][3] for i in 1:length(sol.u)]) <= 1e-12
 
 g = function (du, u, p, t)
     du[1] = u[1]
@@ -52,8 +70,8 @@ jump_prob = JumpProblem(prob, jump, jump2; vr_aggregator = VR_FRM())
 sol = solve(jump_prob, SRIW1(); rng)
 jump_prob_gill = JumpProblem(prob, jump, jump2; vr_aggregator = VR_Direct())
 sol_gill = solve(jump_prob_gill, SRIW1(); rng)
-@test maximum([sol.u[i][2] for i in 1:length(sol)]) <= 1e-12
-@test maximum([sol.u[i][3] for i in 1:length(sol)]) <= 1e-12
+@test maximum([sol.u[i][2] for i in 1:length(sol.u)]) <= 1e-12
+@test maximum([sol.u[i][3] for i in 1:length(sol.u)]) <= 1e-12
 
 function ff(du, u, p, t)
     if p == 0
@@ -271,8 +289,6 @@ end
 
 # accuracy test based on 
 # https://github.com/SciML/JumpProcesses.jl/issues/320
-# note that even with the seeded StableRNG this test is not 
-# deterministic for some reason.
 function getmean(Nsims, prob, alg, tsave, rng)
     umean = zeros(length(tsave))
     integrator = init(prob, alg; saveat = tsave, rng)
@@ -419,7 +435,8 @@ let
         integrator.p[3] += 1
         nothing
     end
-    birth_jump = VariableRateJump(birth_rate, birth_affect!; save_positions = (false, false))
+    birth_jump = VariableRateJump(birth_rate, birth_affect!; save_positions = (
+        false, false))
 
     # Define death jump: X → ∅
     death_rate(u, p, t) = 0.5 * u[1]
@@ -428,7 +445,8 @@ let
         integrator.p[3] += 1
         nothing
     end
-    death_jump = VariableRateJump(death_rate, death_affect!; save_positions = (false, false))
+    death_jump = VariableRateJump(death_rate, death_affect!; save_positions = (
+        false, false))
 
     Nsims = 100
     results = Dict()
@@ -564,4 +582,68 @@ let
         @test SciMLBase.successful_retcode(sol)
         @test sol.u[end][1] + sol.u[end][2] ≈ u0[1] + u0[2]
     end
+end
+
+# Regression for https://github.com/SciML/JumpProcesses.jl/issues/592
+# VR_FRM + SDEProblem with `noise_rate_prototype` + adaptive non-diagonal SDE
+# solver: ExtendedJumpArray's `mul!` needs to zero `c.jump_u` when the noise
+# matrix only addresses the original state, otherwise stale scratchpad values
+# from the adaptive error estimate blow up `jump_u` and the VRJ callbacks
+# never fire.
+let
+    rng = StableRNG(592)
+
+    mutable struct Issue592Params
+        λ::Float64
+        μ::Float64
+        mode::Symbol
+    end
+    p = Issue592Params(0.3, 0.5, :CLE)
+
+    function f!(du, u, p, t)
+        du[1] = (p.mode === :CLE) ? (p.λ - p.μ) * u[1] : 0.0
+        nothing
+    end
+    function g!(G, u, p, t)
+        if p.mode === :CLE
+            x = max(u[1], 0.0)
+            G[1, 1] = sqrt(p.λ * x)
+            G[1, 2] = -sqrt(p.μ * x)
+        else
+            G .= 0.0
+        end
+        nothing
+    end
+
+    rate_birth(u, p, t) = (p.mode === :SSA) ? p.λ * u[1] : 0.0
+    rate_death(u, p, t) = (p.mode === :SSA) ? p.μ * u[1] : 0.0
+    birth_affect!(integ) = (integ.u[1] += 1.0)
+    death_affect!(integ) = (integ.u[1] -= 1.0)
+    birth = VariableRateJump(rate_birth, birth_affect!)
+    death = VariableRateJump(rate_death, death_affect!)
+
+    switch_cond(u, t, integ) = (integ.p.mode === :CLE) ? u[1] - 95.0 : 1.0
+    function switch_affect!(integ)
+        integ.u[1] = max(round(integ.u[1]), 0.0)
+        integ.p.mode = :SSA
+        derivative_discontinuity!(integ, true)
+        reset_aggregated_jumps!(integ)
+    end
+    switch_cb = ContinuousCallback(switch_cond, switch_affect!)
+
+    u0 = [150.0]
+    tspan = (0.0, 10.0)
+    sde_prob = SDEProblem(f!, g!, u0, tspan, p; noise_rate_prototype = zeros(1, 2))
+    jprob = JumpProblem(sde_prob, Direct(), birth, death; vr_aggregator = VR_FRM(), rng)
+
+    sol = solve(jprob, LambaEM(); callback = switch_cb, adaptive = true)
+    @test SciMLBase.successful_retcode(sol)
+    @test sol.t[end] == tspan[2]
+    # The bug drove `jump_u` past ±1e15 within a few steps; with the fix it
+    # stays bounded near its initial -randexp() values.
+    @test all(isfinite, sol.u[end].jump_u)
+    @test maximum(abs, sol.u[end].jump_u) < 1e6
+    # SSA jumps must actually fire after the mode switch — without the fix u
+    # gets pinned at the switch threshold (95) forever.
+    @test sol.u[end].u[1] != 95.0
 end

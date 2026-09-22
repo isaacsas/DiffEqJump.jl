@@ -59,7 +59,7 @@ see the
 [tutorial](https://docs.sciml.ai/JumpProcesses/stable/tutorials/discrete_stochastic_example/)
 for details.
 """
-struct SSAStepper <: DiffEqBase.DEAlgorithm end
+struct SSAStepper <: SciMLBase.AbstractDEAlgorithm end
 SciMLBase.allows_late_binding_tstops(::SSAStepper) = true
 SciMLBase.supports_solve_rng(::JumpProblem, ::SSAStepper) = true
 
@@ -134,11 +134,34 @@ end
 (integrator::SSAIntegrator)(t) = copy(integrator.u)
 (integrator::SSAIntegrator)(out, t) = (out .= integrator.u)
 
-function DiffEqBase.u_modified!(integrator::SSAIntegrator, bool::Bool)
+# SciMLBase v3 / DiffEqBase v7 renamed the integrator's `u_modified` field to
+# `derivative_discontinuity` and internal callback code now reads/writes the
+# field directly (e.g. `integrator.derivative_discontinuity`, not via a
+# method). Aliasing here so both names access the same underlying storage —
+# v6-era callbacks that look for `:u_modified` and v7-era callbacks that look
+# for `:derivative_discontinuity` both keep working without renaming the
+# struct field (which would be a breaking ABI change).
+@inline function Base.getproperty(integrator::SSAIntegrator, sym::Symbol)
+    sym === :derivative_discontinuity && return getfield(integrator, :u_modified)
+    sym === :ps && return SII.ParameterIndexingProxy(integrator)
+    return getfield(integrator, sym)
+end
+
+@inline function Base.setproperty!(integrator::SSAIntegrator, sym::Symbol, val)
+    sym === :derivative_discontinuity &&
+        return setfield!(integrator, :u_modified, convert(Bool, val))
+    return setfield!(integrator, sym, convert(fieldtype(typeof(integrator), sym), val))
+end
+
+function Base.propertynames(integrator::SSAIntegrator, private::Bool = false)
+    return (fieldnames(SSAIntegrator)..., :derivative_discontinuity)
+end
+
+function SciMLBase.derivative_discontinuity!(integrator::SSAIntegrator, bool::Bool)
     integrator.u_modified = bool
 end
 
-function DiffEqBase.__solve(jump_prob::JumpProblem, alg::SSAStepper; kwargs...)
+function SciMLBase.__solve(jump_prob::JumpProblem, alg::SSAStepper; kwargs...)
     # init will handle kwargs merging via init_call
     integrator = init(jump_prob, alg; kwargs...)
     solve!(integrator)
@@ -183,7 +206,7 @@ function DiffEqBase.solve!(integrator::SSAIntegrator)
     end
 
     if integrator.sol.retcode === ReturnCode.Default
-        integrator.sol = DiffEqBase.solution_new_retcode(integrator.sol, ReturnCode.Success)
+        integrator.sol = SciMLBase.solution_new_retcode(integrator.sol, ReturnCode.Success)
     end
 end
 
@@ -214,7 +237,7 @@ function check_continuous_callback_error(callback)
     return nothing
 end
 
-function DiffEqBase.__init(jump_prob::JumpProblem,
+function SciMLBase.__init(jump_prob::JumpProblem,
         alg::SSAStepper;
         save_start = true,
         save_end = true,
@@ -260,10 +283,10 @@ function DiffEqBase.__init(jump_prob::JumpProblem,
     end
     save_everystep = any(cb.save_positions)
 
-    sol = DiffEqBase.build_solution(prob, alg, t, u, dense = save_everystep,
+    sol = SciMLBase.build_solution(prob, alg, t, u, dense = save_everystep,
         calculate_error = false,
         stats = DiffEqBase.Stats(0),
-        interp = DiffEqBase.ConstantInterpolation(t, u))
+        interp = SciMLBase.ConstantInterpolation(t, u))
 
     _saveat = (saveat isa Number) ? (prob.tspan[1]:saveat:prob.tspan[2]) : saveat
     if _saveat !== nothing && !isempty(_saveat) && _saveat[1] == prob.tspan[1]
@@ -378,9 +401,8 @@ function DiffEqBase.step!(integrator::SSAIntegrator)
 
     @inbounds if integrator.saveat !== nothing && !isempty(integrator.saveat)
         # Split to help prediction
-        while integrator.cur_saveat < length(integrator.saveat) &&
+        while integrator.cur_saveat <= length(integrator.saveat) &&
             integrator.saveat[integrator.cur_saveat] < integrator.t
-            saved = true
             push!(integrator.sol.t, integrator.saveat[integrator.cur_saveat])
             push!(integrator.sol.u, copy(integrator.u))
             integrator.cur_saveat += 1
@@ -447,7 +469,7 @@ end
 
 function DiffEqBase.terminate!(integrator::SSAIntegrator, retcode = ReturnCode.Terminated)
     integrator.keep_stepping = false
-    integrator.sol = DiffEqBase.solution_new_retcode(integrator.sol, retcode)
+    integrator.sol = SciMLBase.solution_new_retcode(integrator.sol, retcode)
     nothing
 end
 

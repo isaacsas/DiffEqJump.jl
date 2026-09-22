@@ -90,10 +90,15 @@ end
 Base.zero(A::ExtendedJumpArray) = fill!(similar(A), 0)
 
 # Required for non-diagonal noise; also handles full-state matrices from LinearSolve
-function LinearAlgebra.mul!(c::ExtendedJumpArray, A::AbstractVecOrMat, u::AbstractVector)
+function _mul_extended_jump_array!(c::ExtendedJumpArray, A::AbstractVecOrMat,
+        u::AbstractVector)
     Nu = length(c.u)
     if size(A, 1) == Nu
         mul!(c.u, A, u)
+        # zero c.jump_u so callers (e.g. adaptive SDE step caches that reuse `c`
+        # as a scratchpad) do not see stale values as a noise contribution on
+        # the jump-rate-integral state
+        fill!(c.jump_u, zero(eltype(c.jump_u)))
     elseif size(A, 1) == length(c)
         mul!(c.u, @view(A[1:Nu, :]), u)
         mul!(c.jump_u, @view(A[(Nu + 1):end, :]), u)
@@ -102,10 +107,21 @@ function LinearAlgebra.mul!(c::ExtendedJumpArray, A::AbstractVecOrMat, u::Abstra
     end
 end
 
-# Ignore axes
+LinearAlgebra.mul!(c::ExtendedJumpArray, A::AbstractVecOrMat, u::AbstractVector) =
+    _mul_extended_jump_array!(c, A, u)
+
+LinearAlgebra.mul!(c::ExtendedJumpArray, A::LinearAlgebra.AbstractTriangular,
+    u::AbstractVector) = _mul_extended_jump_array!(c, A, u)
+
+# Whole-array copies stay ExtendedJumpArrays. A subset getindex asks `similar`
+# for a container of the index shape, which no longer matches this array's axes;
+# Julia 1.13 checks the result's axes, so return a plain dense array there.
 function Base.similar(A::ExtendedJumpArray, ::Type{S},
         axes::Tuple{Base.OneTo{Int}}) where {S}
-    ExtendedJumpArray(similar(A.u, S), similar(A.jump_u, S))
+    if axes == Base.axes(A)
+        return ExtendedJumpArray(similar(A.u, S), similar(A.jump_u, S))
+    end
+    return similar(A.u, S, axes)
 end
 
 # plotting
@@ -135,8 +151,19 @@ end
 function LinearAlgebra.ldiv!(A::LinearAlgebra.LU, b::ExtendedJumpArray)
     _eja_flat_apply_and_scatter!(LinearAlgebra.ldiv!, A, b)
 end
+function LinearAlgebra.ldiv!(A::LinearAlgebra.LU{T, LinearAlgebra.Tridiagonal{T, V}},
+        b::ExtendedJumpArray) where {T, V}
+    _eja_flat_apply_and_scatter!(LinearAlgebra.ldiv!, A, b)
+end
 
 function LinearAlgebra.lmul!(A::LinearAlgebra.AbstractQ, b::ExtendedJumpArray)
+    _eja_flat_apply_and_scatter!(LinearAlgebra.lmul!, A, b)
+end
+function LinearAlgebra.lmul!(A::LinearAlgebra.QRPackedQ, b::ExtendedJumpArray)
+    _eja_flat_apply_and_scatter!(LinearAlgebra.lmul!, A, b)
+end
+function LinearAlgebra.lmul!(A::LinearAlgebra.AdjointQ{<:Any, <:LinearAlgebra.QRPackedQ},
+        b::ExtendedJumpArray)
     _eja_flat_apply_and_scatter!(LinearAlgebra.lmul!, A, b)
 end
 

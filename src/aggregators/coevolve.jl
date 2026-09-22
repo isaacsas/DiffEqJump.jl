@@ -149,7 +149,7 @@ function aggregate(aggregator::Coevolve, u, p, t, end_time, constant_jumps,
 end
 
 # set up a new simulation and calculate the first jump / jump time
-function initialize!(p::CoevolveJumpAggregation, integrator, u, params, t)
+function initialize!(p::CoevolveJumpAggregation, integrator, u, params, t::Number)
     p.end_time = integrator.sol.prob.tspan[2]
     fill_scaled_rates!(p.maj_rates, p.ma_jumps, params)
     rng = get_rng(integrator)
@@ -226,7 +226,7 @@ function accept_next_jump!(p::CoevolveJumpAggregation, integrator, u, params, t)
     p.prev_jump = next_jump
     generate_jumps!(p, integrator, integrator.u, integrator.p, integrator.t)
     register_next_jump_time!(integrator, p, integrator.t)
-    u_modified!(integrator, false)
+    derivative_discontinuity!(integrator, false)
 
     return false
 end

@@ -1,4 +1,4 @@
-using JumpProcesses, OrdinaryDiffEq, StochasticDiffEq, Test
+using JumpProcesses, OrdinaryDiffEq, SciMLBase, StochasticDiffEq, Test
 using StableRNGs, Random
 
 # ==========================================================================
@@ -86,6 +86,8 @@ end
         sols = [solve(jprob, Tsit5(); rng) for _ in 1:3]
         times = [first_jump_time(s) for s in sols]
         @test allunique(times)
+        finals = [s.u[end][1] for s in sols]
+        @test allunique(finals)
     end
 end
 
@@ -125,6 +127,31 @@ end
         sols = [solve(jprob, Tsit5(); rng = StableRNG(s)) for s in (100, 200, 300)]
         times = [first_jump_time(s) for s in sols]
         @test allunique(times)
+    end
+end
+
+@testset "EnsembleThreads: no data race" begin
+    @testset "SSAStepper" begin
+        jprob = make_ssa_jump_prob()
+        sol = solve(EnsembleProblem(jprob), SSAStepper(), EnsembleThreads();
+            trajectories = 4)
+        @test length(sol.u) == 4
+    end
+
+    @testset "ODE + VR ($agg)" for agg in (VR_FRM(), VR_Direct(), VR_DirectFW())
+        jprob = make_vr_jump_prob(agg)
+        sol = solve(EnsembleProblem(jprob), Tsit5(), EnsembleThreads();
+            trajectories = 4, save_everystep = false)
+        @test length(sol.u) == 4
+    end
+
+    @testset "SDE + VR (VR_FRM): unique trajectories" begin
+        jprob = make_sde_vr_jump_prob(VR_FRM())
+        sol = solve(EnsembleProblem(jprob), EM(), EnsembleThreads();
+            trajectories = 4, dt = 0.01, save_everystep = false)
+        @test length(sol.u) == 4
+        finals = [sol.u[i].u[end][1] for i in 1:4]
+        @test length(unique(finals)) > 1
     end
 end
 
