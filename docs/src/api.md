@@ -199,7 +199,7 @@ backends.
 |---|---|---|---|
 | `SSAStepper` | JumpProcesses (`solve.jl`) | JumpProcesses (`SSA_stepper.jl`) | No |
 | OrdinaryDiffEq ODE/DAE (e.g., `Tsit5`, `DFBDF`) | JumpProcesses (`solve.jl`) | JumpProcesses' OrdinaryDiffEqCore extension → OrdinaryDiffEq | Yes |
-| StochasticDiffEq SDE/RODE (e.g., `SRIW1`, `RandomEM`) | StochasticDiffEqCore | JumpProcesses' OrdinaryDiffEqCore extension → StochasticDiffEqCore's JumpProblem initializer | No |
+| StochasticDiffEq SDE/RODE (e.g., `SRIW1`, `RandomEM`) | StochasticDiffEqCore | StochasticDiffEqCore's JumpProblem initializer | No |
 | StochasticDiffEq jump algorithms (e.g., `TauLeaping`) | StochasticDiffEqCore | StochasticDiffEqCore's specialized jump-algorithm initializer | No |
 | `SimpleTauLeaping` | JumpProcesses (`simple_regular_solve.jl`, custom `DiffEqBase.solve`) | N/A | No |
 
@@ -211,19 +211,18 @@ For **OrdinaryDiffEq ODE/DAE solvers**, `rng` is resolved via `resolve_rng` in `
 `ODEIntegrator`.
 
 For **StochasticDiffEq SDE/RODE solvers**, the backend's more specific `__solve`
-handles solves. JumpProcesses' extension resolves the public `init` dispatch
-ambiguity by invoking the backend's existing initializer with the original
-JumpProblem and unchanged RNG/seed inputs. Both routes therefore use
-the backend's JumpProblem initializer, including its RNG policy, jump-state
-copying, and callback setup. Older supported StochasticDiffEqCore releases route
-`solve` through `__init` and therefore also use the extension. DiffEqBase merges
-stored problem keywords and user callbacks before dispatching `init`; the
-extension does not merge them a second time.
+and `__init` methods handle the original JumpProblem and unchanged RNG/seed
+inputs. Both routes use the backend's JumpProblem initializer, including its RNG
+policy, jump-state copying, and callback setup. DiffEqBase merges stored problem
+keywords and user callbacks before dispatching `init`.
 
-An explicit legacy `alias_jump` passed to stochastic `init` retains its existing
-jump-copy override through the backend's `alias_jumps` field, preserving other
-alias settings. With that keyword omitted, the backend controls jump aliasing.
-This compatibility path does not change the alias API of SSAStepper or ODE solvers.
+Control stochastic jump-state copying through the backend's alias specifier:
+`alias = SciMLBase.SDEAliasSpecifier(; alias_jumps = false)` for SDE problems,
+or `SciMLBase.RODEAliasSpecifier` for RODE problems. Set the `alias_jumps` field
+to `true` to reuse the original jump state. When that field is unspecified, the
+backend aliases on thread 1 and copies on other threads. Both `solve` and `init`
+follow this policy; `alias_jumps` is a field of the specifier, not a standalone
+keyword argument.
 
 For **tau-leaping**, JumpProcesses defines a custom `DiffEqBase.solve` that
 bypasses the standard `__solve`/`__init` pathway. It calls `resolve_rng`

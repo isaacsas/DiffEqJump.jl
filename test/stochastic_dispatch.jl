@@ -22,6 +22,14 @@ stochastic_rng_options(kind) =
     kind === :task_rng ? (; rng = Random.default_rng()) :
     (; rng = StableRNG(789), seed = 456)
 
+@testset "Stochastic initialization dispatches to the backend" begin
+    for (kind, alg) in ((:SDE, EM()), (:RODE, RandomEM()))
+        jprob = stochastic_jump_problem(kind)
+        method = which(SciMLBase.__init, (typeof(jprob), typeof(alg)))
+        @test method.module === StochasticDiffEq.StochasticDiffEqCore
+    end
+end
+
 @testset "Stochastic solve/init use the same RNG policy" begin
     @testset "$kind stored seed=$stored_seed options=$options_kind variable=$variable" for
             (kind, alg, variable) in ((:SDE, EM(), false), (:SDE, EM(), true),
@@ -91,19 +99,22 @@ end
     end
 end
 
-@testset "Stochastic initialization preserves explicit legacy alias_jump" begin
+@testset "Stochastic initialization preserves native alias settings" begin
     for (kind, alg) in ((:SDE, EM()), (:RODE, RandomEM())),
-            alias_jump in (true, false), native_alias in (nothing, true, false, :specifier)
+            alias_mode in (:default, :alias, :copy, :specifier_alias, :specifier_copy)
         jprob = stochastic_jump_problem(kind)
         constructor = kind === :SDE ? SciMLBase.SDEAliasSpecifier : SciMLBase.RODEAliasSpecifier
-        alias = native_alias === :specifier ?
-            constructor(; alias_jumps = !alias_jump, alias_u0 = false) : native_alias
-        integrator = init(jprob, alg; dt = 0.01, seed = 123, alias_jump, alias)
+        alias_jumps = alias_mode === :default ? Threads.threadid() == 1 :
+            alias_mode in (:alias, :specifier_alias)
+        alias = alias_mode === :default ? nothing :
+            alias_mode in (:alias, :copy) ? alias_jumps :
+            constructor(; alias_jumps, alias_u0 = false)
+        integrator = init(jprob, alg; dt = 0.01, seed = 123, alias)
         aliases_aggregation = any(integrator.opts.callback.discrete_callbacks) do callback
             callback.condition === jprob.discrete_jump_aggregation
         end
-        @test aliases_aggregation == alias_jump
-        if native_alias in (false, :specifier)
+        @test aliases_aggregation == alias_jumps
+        if alias_mode in (:copy, :specifier_alias, :specifier_copy)
             @test integrator.u !== jprob.prob.u0
         end
         solve!(integrator)
