@@ -27,6 +27,7 @@ function run_explicit_tau_kernel_tests(backend, nsims)
         ss = serial_solve(jp, nsims; kwargs...)
         @test sk.u[1].t == ss.u[1].t
         for k in eachindex(sk.u[1].t), s in 1:nspec
+
             mk = mean(sk.u[i].u[k][s] for i in 1:nsims)
             ms = mean(ss.u[i].u[k][s] for i in 1:nsims)
             @test isapprox(mk, ms; rtol, atol)

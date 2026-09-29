@@ -16,20 +16,23 @@ jprob = JumpProblem(dprob, Direct(), maj)
 sol = solve(EnsembleProblem(jprob), SSAStepper(), EnsembleThreads();
     trajectories = 400)
 @test length(sol.u) == 400
-firstrx_time = [sol.u[i].t[findfirst(>(sol.u[i].t[1]), sol.u[i].t)] for i in 1:length(sol.u)]
+firstrx_time = [sol.u[i].t[findfirst(>(sol.u[i].t[1]), sol.u[i].t)]
+                for i in 1:length(sol.u)]
 @test allunique(firstrx_time)
 
 sol2 = solve(EnsembleProblem(jprob; safetycopy = true), SSAStepper(), EnsembleThreads();
     trajectories = 400)
 @test length(sol2.u) == 400
-firstrx_time2 = [sol2.u[i].t[findfirst(>(sol2.u[i].t[1]), sol2.u[i].t)] for i in 1:length(sol2.u)]
+firstrx_time2 = [sol2.u[i].t[findfirst(>(sol2.u[i].t[1]), sol2.u[i].t)]
+                 for i in 1:length(sol2.u)]
 @test allunique(firstrx_time2)
 
 @testset "Threaded ensemble RNG and seed controls" begin
     paths(sol) = [(trajectory.t, trajectory.u) for trajectory in sol.u]
     first_event_times(sol) = [trajectory.t[findfirst(>(first(trajectory.t)), trajectory.t)]
-                             for trajectory in sol.u]
+                              for trajectory in sol.u]
     for safetycopy in (false, true), input in (:rng, :seed)
+
         @testset "safetycopy=$safetycopy, $input" begin
             # Construct a fresh master RNG for each ensemble solve. Only the
             # ensemble layer uses this object; each trajectory receives its own RNG.
@@ -69,7 +72,8 @@ let
         prob = EnsembleProblem(jump_prob)
         sol = solve(prob, Tsit5(), EnsembleThreads(), trajectories = 400,
             save_everystep = false)
-        firstrx_time = [sol.u[i].t[findfirst(>(sol.u[i].t[1]), sol.u[i].t)] for i in 1:length(sol.u)]
+        firstrx_time = [sol.u[i].t[findfirst(>(sol.u[i].t[1]), sol.u[i].t)]
+                        for i in 1:length(sol.u)]
         @test allunique(firstrx_time)
     end
 end
@@ -87,7 +91,8 @@ let
         prob = EnsembleProblem(jump_prob)
         sol = solve(prob, SRIW1(), EnsembleThreads();
             trajectories = 400, save_everystep = false)
-        firstrx_time = [sol.u[i].t[findfirst(>(sol.u[i].t[1]), sol.u[i].t)] for i in 1:length(sol.u)]
+        firstrx_time = [sol.u[i].t[findfirst(>(sol.u[i].t[1]), sol.u[i].t)]
+                        for i in 1:length(sol.u)]
         @test allunique(firstrx_time)
     end
 end

@@ -6,21 +6,22 @@ function stochastic_jump_problem(kind; seed = 0, variable = false, callback = no
     g!(du, u, p, t) = (du .= 0.2)
     f_rode!(du, u, p, t, W) = (du .= -0.1 .* u .+ 0.2 .* W)
     prob = kind === :SDE ?
-        SDEProblem(f!, g!, [10.0], (0.0, 0.5), zeros(Int, 2); seed) :
-        RODEProblem(f_rode!, [10.0], (0.0, 0.5), zeros(Int, 2); seed)
+           SDEProblem(f!, g!, [10.0], (0.0, 0.5), zeros(Int, 2); seed) :
+           RODEProblem(f_rode!, [10.0], (0.0, 0.5), zeros(Int, 2); seed)
     rate(u, p, t) = 10.0
     affect!(integrator) = (integrator.u[1] += 1)
     jump = variable ? VariableRateJump(rate, affect!) : ConstantRateJump(rate, affect!)
     JumpProblem(prob, Direct(), jump; callback)
 end
 
-stochastic_rng_options(kind) =
+function stochastic_rng_options(kind)
     kind === :default ? (;) :
     kind === :seed ? (; seed = 456) :
     kind === :zero_seed ? (; seed = 0) :
     kind === :task_rng_seed ? (; rng = Random.default_rng(), seed = 456) :
     kind === :task_rng ? (; rng = Random.default_rng()) :
     (; rng = StableRNG(789), seed = 456)
+end
 
 @testset "Stochastic initialization dispatches to the backend" begin
     for (kind, alg) in ((:SDE, EM()), (:RODE, RandomEM()))
@@ -31,12 +32,13 @@ stochastic_rng_options(kind) =
 end
 
 @testset "Stochastic solve/init use the same RNG policy" begin
-    @testset "$kind stored seed=$stored_seed options=$options_kind variable=$variable" for
-            (kind, alg, variable) in ((:SDE, EM(), false), (:SDE, EM(), true),
-                (:RODE, RandomEM(), false)),
-            stored_seed in (0, 123),
-            options_kind in (:default, :seed, :zero_seed, :task_rng_seed, :task_rng,
-                :explicit_rng_seed)
+    @testset "$kind stored seed=$stored_seed options=$options_kind variable=$variable" for (kind, alg, variable) in ((
+            :SDE, EM(), false), (:SDE, EM(), true),
+            (:RODE, RandomEM(), false)),
+        stored_seed in (0, 123),
+        options_kind in (:default, :seed, :zero_seed, :task_rng_seed, :task_rng,
+            :explicit_rng_seed)
+
         Random.seed!(999)
         sol = solve(stochastic_jump_problem(kind; seed = stored_seed, variable), alg;
             dt = 0.01, stochastic_rng_options(options_kind)...)
@@ -57,7 +59,7 @@ end
         @test sol.u == integrator.sol.u
         @test sol.seed == integrator.sol.seed
         expected_seed = options_kind === :explicit_rng_seed ? 0 :
-            options_kind in (:seed, :task_rng_seed) ? 456 : stored_seed
+                        options_kind in (:seed, :task_rng_seed) ? 456 : stored_seed
         if expected_seed != 0 || options_kind === :explicit_rng_seed
             @test sol.seed == expected_seed
         end
@@ -65,14 +67,16 @@ end
 end
 
 @testset "Stochastic initialization preserves callback merging" begin
-    @testset "merge_callbacks=$merge_callbacks entry=$entry" for
-            merge_callbacks in (true, false), entry in (:solve, :init)
+    @testset "merge_callbacks=$merge_callbacks entry=$entry" for merge_callbacks in (true, false),
+        entry in (:solve, :init)
+
         cb1 = DiscreteCallback((u, t, integrator) -> t == 0.25,
             integrator -> (integrator.p[1] += 1); save_positions = (false, false))
         cb2 = DiscreteCallback((u, t, integrator) -> t == 0.25,
             integrator -> (integrator.p[2] += 1); save_positions = (false, false))
         jprob = stochastic_jump_problem(:SDE; callback = cb1)
-        options = (; seed = 123, dt = 0.01, tstops = [0.25], callback = cb2, merge_callbacks)
+        options = (;
+            seed = 123, dt = 0.01, tstops = [0.25], callback = cb2, merge_callbacks)
         sol = if entry === :solve
             solve(jprob, EM(); options...)
         else
@@ -101,14 +105,16 @@ end
 
 @testset "Stochastic initialization preserves native alias settings" begin
     for (kind, alg) in ((:SDE, EM()), (:RODE, RandomEM())),
-            alias_mode in (:default, :alias, :copy, :specifier_alias, :specifier_copy)
+        alias_mode in (:default, :alias, :copy, :specifier_alias, :specifier_copy)
+
         jprob = stochastic_jump_problem(kind)
-        constructor = kind === :SDE ? SciMLBase.SDEAliasSpecifier : SciMLBase.RODEAliasSpecifier
+        constructor = kind === :SDE ? SciMLBase.SDEAliasSpecifier :
+                      SciMLBase.RODEAliasSpecifier
         alias_jumps = alias_mode === :default ? Threads.threadid() == 1 :
-            alias_mode in (:alias, :specifier_alias)
+                      alias_mode in (:alias, :specifier_alias)
         alias = alias_mode === :default ? nothing :
-            alias_mode in (:alias, :copy) ? alias_jumps :
-            constructor(; alias_jumps, alias_u0 = false)
+                alias_mode in (:alias, :copy) ? alias_jumps :
+                constructor(; alias_jumps, alias_u0 = false)
         integrator = init(jprob, alg; dt = 0.01, seed = 123, alias)
         aliases_aggregation = any(integrator.opts.callback.discrete_callbacks) do callback
             callback.condition === jprob.discrete_jump_aggregation

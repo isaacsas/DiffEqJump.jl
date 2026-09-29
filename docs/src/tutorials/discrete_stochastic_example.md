@@ -21,7 +21,7 @@ chemical kinetics (i.e., Gillespie) models. It is not necessary to have read the
     τ-leaping methods.
 
 !!! note
-    
+
     This tutorial assumes you have read the [Ordinary Differential Equations tutorial](https://docs.sciml.ai/DiffEqDocs/stable/getting_started/) in [`DifferentialEquations.jl`](https://docs.sciml.ai/DiffEqDocs/stable).
 
 We begin by demonstrating how to build jump processes using
@@ -931,6 +931,7 @@ u₀ = [1000.0, 50.0, 0.0]
 prob = DiscreteProblem(u₀, tspan, p)
 jump_prob = JumpProblem(prob, PureLeaping(), rj)
 ```
+
 We pass the `PureLeaping` aggregator to indicate we will use a τ-leaping algorithm to simulate the process.
 Note that when a `JumpProblem` has a `RegularJump`, τ-leaping algorithms are
 required for simulating it. This is detailed on the [jump solvers page](@ref

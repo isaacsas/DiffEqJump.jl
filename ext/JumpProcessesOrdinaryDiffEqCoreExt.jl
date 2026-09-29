@@ -4,7 +4,7 @@ using JumpProcesses
 import DiffEqBase
 import SciMLBase
 import OrdinaryDiffEqCore: OrdinaryDiffEqAlgorithm, DAEAlgorithm,
-    StochasticDiffEqAlgorithm, StochasticDiffEqRODEAlgorithm
+                           StochasticDiffEqAlgorithm, StochasticDiffEqRODEAlgorithm
 
 function _jump_init(_jump_prob, alg; merge_callbacks = true, kwargs...)
     kwargs = DiffEqBase.merge_problem_kwargs(_jump_prob; merge_callbacks, kwargs...)

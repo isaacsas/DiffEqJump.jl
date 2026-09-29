@@ -115,14 +115,17 @@ $(FIELDS)
 ```julia
 using JumpProcesses
 
-maj = MassActionJump([1.0, 1.0], [[1 => 1], [2 => 1]], [[1 => -1, 2 => 1], [1 => 1, 2 => -1]])
+maj = MassActionJump([1.0, 1.0], [[1 => 1], [2 => 1]], [
+    [1 => -1, 2 => 1], [1 => 1, 2 => -1]])
 prob = DiscreteProblem([100, 100], (0.0, 10.0))
 jprob = JumpProblem(prob, PureLeaping(), maj)
 sol = solve(jprob, SimpleImplicitTauLeaping())
 ```
 """
 struct SimpleImplicitTauLeaping{T <: AbstractFloat} <: SciMLBase.AbstractDEAlgorithm
-    """Error control parameter used when selecting `tau`."""
+    """
+    Error control parameter used when selecting `tau`.
+    """
     epsilon::T
 end
 
@@ -159,14 +162,17 @@ $(FIELDS)
 ```julia
 using JumpProcesses
 
-maj = MassActionJump([1.0, 1.0], [[1 => 1], [2 => 1]], [[1 => -1, 2 => 1], [1 => 1, 2 => -1]])
+maj = MassActionJump([1.0, 1.0], [[1 => 1], [2 => 1]], [
+    [1 => -1, 2 => 1], [1 => 1, 2 => -1]])
 prob = DiscreteProblem([100, 100], (0.0, 10.0))
 jprob = JumpProblem(prob, PureLeaping(), maj)
 sol = solve(jprob, SimpleTrapezoidalLeaping())
 ```
 """
 struct SimpleTrapezoidalLeaping{T <: AbstractFloat} <: SciMLBase.AbstractDEAlgorithm
-    """Error control parameter used when selecting `tau`."""
+    """
+    Error control parameter used when selecting `tau`.
+    """
     epsilon::T
 end
 
@@ -209,7 +215,8 @@ $(FIELDS)
 ```julia
 using JumpProcesses
 
-maj = MassActionJump([1.0, 1.0], [[1 => 1], [2 => 1]], [[1 => -1, 2 => 1], [1 => 1, 2 => -1]])
+maj = MassActionJump([1.0, 1.0], [[1 => 1], [2 => 1]], [
+    [1 => -1, 2 => 1], [1 => 1, 2 => -1]])
 prob = DiscreteProblem([100, 100], (0.0, 10.0))
 jprob = JumpProblem(prob, PureLeaping(), maj)
 
@@ -219,15 +226,25 @@ sol = solve(jprob, SimpleAdaptiveTauLeaping(implicit_alg = SimpleTrapezoidalLeap
 """
 struct SimpleAdaptiveTauLeaping{T <: AbstractFloat, A <: SciMLBase.AbstractDEAlgorithm} <:
        SciMLBase.AbstractDEAlgorithm
-    """Error control parameter used when selecting `tau`."""
+    """
+    Error control parameter used when selecting `tau`.
+    """
     epsilon::T
-    """The algorithm used for steps that are taken implicitly."""
+    """
+    The algorithm used for steps that are taken implicitly.
+    """
     implicit_alg::A
-    """Whether to judge stiffness from the eigenvalues of the drift Jacobian."""
+    """
+    Whether to judge stiffness from the eigenvalues of the drift Jacobian.
+    """
     eigenvalue_check::Bool
-    """Eigenvalue ratio above which the system counts as stiff."""
+    """
+    Eigenvalue ratio above which the system counts as stiff.
+    """
     stiffness_ratio_threshold::T
-    """Factor relaxing `epsilon` when a step is taken implicitly."""
+    """
+    Factor relaxing `epsilon` when a step is taken implicitly.
+    """
     implicit_epsilon_factor::T
 end
 
@@ -259,9 +276,9 @@ function validate_pure_leaping_inputs(
         jump_prob::JumpProblem,
         alg::Union{
             SimpleExplicitTauLeaping, SimpleImplicitTauLeaping,
-            SimpleTrapezoidalLeaping, SimpleAdaptiveTauLeaping,
+            SimpleTrapezoidalLeaping, SimpleAdaptiveTauLeaping
         }
-    )
+)
     if !(jump_prob.aggregator isa PureLeaping)
         @warn "When using $alg, please pass PureLeaping() as the aggregator to the \
         JumpProblem, i.e. call JumpProblem(::DiscreteProblem, PureLeaping(),...). \
@@ -283,8 +300,9 @@ OrdinaryDiffEq conventions.
 
 Endpoint saving is controlled purely by the returned `save_start`/`save_end`
 flags. When the user passes `nothing` for these, defaults are:
-- No saveat or saveat is a Number: `true` for both.
-- saveat is a collection: `true` if the corresponding endpoint is `in` the collection.
+
+  - No saveat or saveat is a Number: `true` for both.
+  - saveat is a collection: `true` if the corresponding endpoint is `in` the collection.
 """
 function _process_saveat(saveat, tspan, save_start, save_end)
     t0, tf = tspan
@@ -293,7 +311,7 @@ function _process_saveat(saveat, tspan, save_start, save_end)
         _save_start = something(save_start, true)
         _save_end = something(save_end, true)
     elseif saveat isa Number
-        saveat_vec = collect(t0 + saveat:saveat:tf)
+        saveat_vec = collect((t0 + saveat):saveat:tf)
         if !isempty(saveat_vec) && last(saveat_vec) == tf
             pop!(saveat_vec)
         end
@@ -667,7 +685,7 @@ function implicit_equation!(resid, u_new, params)
         for j in 1:numjumps
             for spec_idx in axes(nu, 1)
                 resid[spec_idx] -= nu[spec_idx, j] * half *
-                    (rate_new[j] + rate_current[j]) * tau
+                                   (rate_new[j] + rate_current[j]) * tau
             end
         end
     end
@@ -677,7 +695,7 @@ end
 function solve_implicit(
         u_current, rate_new, rate_current, nu, p, t, tau, rate, numjumps,
         alg
-    )
+)
     u_guess = convert(Vector{float(eltype(u_current))}, u_current)
     params = (; u_current, rate_new, rate_current, nu, p, t, tau, rate, numjumps, alg)
     prob = NonlinearProblem(implicit_equation!, u_guess, params)
@@ -693,7 +711,7 @@ function simple_implicit_tau_leaping_loop!(
         rate, nu, hor, max_hor, max_stoich, numjumps, epsilon,
         dtmin, saveat_times, usave, tsave, du, counts, rate_cache, rate_current, maj,
         save_end
-    )
+)
     save_idx = 1
 
     # Upper bound carried across iterations. Unlike the explicit loop, whose
@@ -714,7 +732,7 @@ function simple_implicit_tau_leaping_loop!(
         )
         tau = min(tau, tau_cap, t_end - t_current)
         if !isempty(saveat_times) && save_idx <= length(saveat_times) &&
-                t_current + tau > saveat_times[save_idx]
+           t_current + tau > saveat_times[save_idx]
             tau = saveat_times[save_idx] - t_current
         end
 
@@ -726,7 +744,7 @@ function simple_implicit_tau_leaping_loop!(
             if tau <= dtmin
                 error(
                     "$(nameof(typeof(alg))) failed to converge at t = $t_current " *
-                        "with the smallest permitted step dtmin = $dtmin."
+                    "with the smallest permitted step dtmin = $dtmin."
                 )
             end
             tau_cap = tau / 2
@@ -738,7 +756,7 @@ function simple_implicit_tau_leaping_loop!(
         for j in eachindex(counts)
             scaled = rate_cache[j] * tau
             counts[j] = scaled <= zero(scaled) ? zero(eltype(counts)) :
-                pois_rand(rng, scaled)
+                        pois_rand(rng, scaled)
         end
 
         du .= 0
@@ -757,7 +775,7 @@ function simple_implicit_tau_leaping_loop!(
         t_new = t_current + tau
 
         if isempty(saveat_times) ||
-                (save_idx <= length(saveat_times) && t_new >= saveat_times[save_idx])
+           (save_idx <= length(saveat_times) && t_new >= saveat_times[save_idx])
             push!(usave, copy(u_new))
             push!(tsave, t_new)
             if !isempty(saveat_times) && t_new >= saveat_times[save_idx]
@@ -783,7 +801,7 @@ function DiffEqBase.solve(
         seed = nothing, rng = nothing,
         dtmin = nothing,
         saveat = nothing, save_start = nothing, save_end = nothing
-    )
+)
     validate_pure_leaping_inputs(jump_prob, alg) ||
         error("$(nameof(typeof(alg))) can only be used with PureLeaping JumpProblem with a MassActionJump.")
 
@@ -923,7 +941,7 @@ function simple_adaptive_tau_leaping_loop!(
         dtmin, saveat_times, usave, tsave, du, counts, rate_cache, rate_effective,
         rate_current, maj, implicit_alg, eigenvalue_check, stiffness_ratio_threshold,
         implicit_epsilon_factor, save_end
-    )
+)
     save_idx = 1
 
     # Upper bound carried across iterations. An explicit retry redraws the
@@ -959,7 +977,7 @@ function simple_adaptive_tau_leaping_loop!(
         end
         tau = min(tau, tau_cap, t_end - t_current)
         if !isempty(saveat_times) && save_idx <= length(saveat_times) &&
-                t_current + tau > saveat_times[save_idx]
+           t_current + tau > saveat_times[save_idx]
             tau = saveat_times[save_idx] - t_current
         end
 
@@ -974,7 +992,7 @@ function simple_adaptive_tau_leaping_loop!(
             if !converged
                 tau <= dtmin &&
                     error("SimpleAdaptiveTauLeaping failed to converge at t = $t_current " *
-                    "with the smallest permitted step dtmin = $dtmin.")
+                          "with the smallest permitted step dtmin = $dtmin.")
                 tau_cap = tau / 2
                 continue
             end
@@ -1008,7 +1026,7 @@ function simple_adaptive_tau_leaping_loop!(
 
         # Save state if at a saveat time or if saveat is empty
         if isempty(saveat_times) ||
-                (save_idx <= length(saveat_times) && t_new >= saveat_times[save_idx])
+           (save_idx <= length(saveat_times) && t_new >= saveat_times[save_idx])
             push!(usave, copy(u_new))
             push!(tsave, t_new)
             if !isempty(saveat_times) && t_new >= saveat_times[save_idx]
@@ -1034,7 +1052,7 @@ function DiffEqBase.solve(
         seed = nothing, rng = nothing,
         dtmin = nothing,
         saveat = nothing, save_start = nothing, save_end = nothing
-    )
+)
     validate_pure_leaping_inputs(jump_prob, alg) ||
         error("SimpleAdaptiveTauLeaping can only be used with PureLeaping JumpProblem with a MassActionJump.")
 

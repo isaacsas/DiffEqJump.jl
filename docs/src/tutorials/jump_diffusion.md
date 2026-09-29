@@ -1,7 +1,7 @@
 # [Piecewise Deterministic Markov Processes and Jump Diffusion Equations](@id jump_diffusion_tutorial)
 
 !!! note
-    
+
     This tutorial assumes you have read the [Ordinary Differential Equations tutorial](https://docs.sciml.ai/DiffEqDocs/stable/getting_started/) in [`DifferentialEquations.jl`](https://docs.sciml.ai/DiffEqDocs/stable).
 
 Jump Diffusion equations are stochastic differential equations (SDEs) with discontinuous

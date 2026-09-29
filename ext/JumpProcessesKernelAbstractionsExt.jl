@@ -138,7 +138,7 @@ end
 
     # Get input/output arrays
     ts_view = @inbounds view(_ts, :, i)
-    us_view = @inbounds view(_us,:,:,i)
+    us_view = @inbounds view(_us, :, :, i)
 
     # Initialize first time step and state
     @inbounds ts_view[1] = tspan[1]

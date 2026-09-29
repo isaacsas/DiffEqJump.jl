@@ -43,9 +43,9 @@ function run_kernel_rng_tests(backend, alg, jump_prob; kwargs...)
         # A single trajectory still delegates all RNG controls to EnsembleSerial,
         # including the ensemble layer's precedence when both rng and seed occur.
         for rng_options in (() -> (; seed = 123),
-                () -> (; rng = Xoshiro(17)),
-                () -> (; rng = Xoshiro(17), seed = 123),
-                () -> (; seed = 123, rng_func = ctx -> Xoshiro(17)))
+            () -> (; rng = Xoshiro(17)),
+            () -> (; rng = Xoshiro(17), seed = 123),
+            () -> (; seed = 123, rng_func = ctx -> Xoshiro(17)))
             kernel = solve(ensemble_prob, alg, EnsembleGPUKernel(backend);
                 trajectories = 1, kwargs..., rng_options()...)
             serial = solve(ensemble_prob, alg, EnsembleSerial();

@@ -63,7 +63,8 @@ end
         @test jprob.massaction_jump.scaled_rates == [0.0, 0.0, 0.0, 0.0, 2.0, 2.0]
         @test jprob.prob.u0 == [6, 0, 9, 0]
         init(jprob, SSAStepper(); seed = 12345, alias_jump = true)
-        @test jprob.discrete_jump_aggregation.maj_rates == jprob.massaction_jump.scaled_rates
+        @test jprob.discrete_jump_aggregation.maj_rates ==
+              jprob.massaction_jump.scaled_rates
         if parameterized
             @test maj.scaled_rates === nothing
         else
@@ -74,7 +75,8 @@ end
 
 @testset "Mass-action merges preserve source arrays and parameter indices" begin
     @testset "$parameterized, $collection" for parameterized in (false, true),
-            collection in (false, true)
+        collection in (false, true)
+
         rs1, rs2 = [[1 => 3]], [[2 => 1]]
         ns1, ns2 = [[1 => -3, 2 => 1]], [[2 => -1, 1 => 3]]
         idxs1, idxs2 = [1], [2]
@@ -137,6 +139,7 @@ end
     maj = MassActionJump([[1 => 3]], [[1 => -3]]; param_idxs = 1)
     prob = DiscreteProblem([6], (0.0, 1.0), [6.0])
     for algorithm in (Direct(), PureLeaping()), value in (false, true)
+
         @test_throws ArgumentError JumpProblem(prob, algorithm, maj; scale_rates = value)
         @test_throws r"scale_rates.*no longer.*MassActionJump" JumpProblem(prob, algorithm,
             maj; scale_rates = value)

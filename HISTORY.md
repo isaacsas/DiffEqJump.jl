@@ -12,7 +12,6 @@ changes are not intended for a 9.x release.
     # Before (no longer works):
     jprob = JumpProblem(dprob, Direct(), jump; rng = Xoshiro(1234))
     sol = solve(jprob, SSAStepper())
-
     # After:
     jprob = JumpProblem(dprob, Direct(), jump)
     sol = solve(jprob, SSAStepper(); rng = Xoshiro(1234))
@@ -62,7 +61,6 @@ changes are not intended for a 9.x release.
     ```julia
     # Before (no longer works):
     jprob = JumpProblem(dprob, Direct(), maj; scale_rates = false)
-
     # After:
     maj = MassActionJump(rates, reactant_stoch, net_stoch; scale_rates = false)
     jprob = JumpProblem(dprob, Direct(), maj)
@@ -73,15 +71,15 @@ changes are not intended for a 9.x release.
     current parameters at initialization and reset. `remake` no longer mutates
     shared rate coefficients in the jump definition. Fixed-rate and symbolic
     definitions retain their supported `scaled_rates` representation. This means:
-      - `update_parameters!` has been removed. Mass action rates are now
+      + `update_parameters!` has been removed. Mass action rates are now
         automatically recomputed from the current parameter values whenever the
         aggregator reinitializes. After modifying parameters (e.g. in a
         callback), call `reset_aggregated_jumps!(integrator)` to trigger
         reinitialization with the updated parameter values.
-      - The `update_jump_params` keyword has been removed from
+      + The `update_jump_params` keyword has been removed from
         `reset_aggregated_jumps!`; supplying either `true` or `false` raises an
         explanatory error. Rate refresh is automatic during reset.
-      - Custom parameter mappers (e.g. ModelingToolkitBase's
+      + Custom parameter mappers (e.g. ModelingToolkitBase's
         `JumpSysMajParamMapper`) must replace the old extraction/mutation
         callables with `(mapper)(dest::AbstractVector, maj::MassActionJump, params)`
         and fill `dest` with the scaled rates. The built-in mapper honors
@@ -118,7 +116,6 @@ changes are not intended for a 9.x release.
 
     ```julia
     using JumpProcesses
-
     rate(u, p, t) = p[1] * u[1] / (1 + u[2])
     function affect!(integrator)
         integrator.u[1] -= 1
@@ -131,10 +128,8 @@ changes are not intended for a 9.x release.
             urate = p[1] * uhigh[1] / (1 + ulow[2])
         )
     end
-
     jump = ConstantRateJump(rate, affect!; bounds)
     prob = DiscreteProblem([10, 0], (0.0, 10.0), [1.0])
-
     # Each species affects the rate of jump 1; jump 1 changes both species.
     vartojumps_map = [[1], [1]]
     jumptovars_map = [[1, 2]]
@@ -157,7 +152,7 @@ changes are not intended for a 9.x release.
   - Added a default aggregator selection algorithm based on the number of passed
     in jumps. i.e. the following now auto-selects an aggregator (`Direct` in this
     case):
-    
+
     ```julia
     using JumpProcesses
     rate(u, p, t) = u[1]
@@ -172,10 +167,11 @@ changes are not intended for a 9.x release.
     `ConstantRateJump`s, and bounded `VariableRateJump`s, one no longer needs to
     specify `SSAStepper()` when calling `solve`, i.e. the following now works for
     the previous example and is equivalent to manually passing `SSAStepper()`:
-    
+
     ```julia
     sol = solve(jprob)
     ```
+
   - Plotting a solution generated with `save_positions = (false, false)` now uses
     piecewise linear plots between any saved time points specified via `saveat`
     instead (previously the plots appeared piecewise constant even though each

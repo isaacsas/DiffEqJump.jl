@@ -13,6 +13,7 @@ An aggregator interface for SSA-like algorithms.
   - `rates`              # vector of rate functions for ConstantRateJumps
   - `affects!`           # vector of affect functions for ConstantRateJumps
   - `save_positions`     # tuple for whether to save the jumps before and/or after event
+
 ### Optional fields:
 
   - `dep_gr`             # dependency graph, dep_gr[i] = indices of reactions that should be updated when rx i occurs.

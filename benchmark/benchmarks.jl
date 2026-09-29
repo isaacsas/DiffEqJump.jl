@@ -50,8 +50,8 @@ SUITE["solve"] = BenchmarkGroup()
 jprob_maj = JumpProblem(dprob, Direct(), maj)
 jprob_cr = JumpProblem(dprob, Direct(), jump1, jump2)
 
-SUITE["solve"]["massaction"] = @benchmarkable solve($jprob_maj, SSAStepper(); rng) setup=(rng = StableRNG(12345)) evals=1
-SUITE["solve"]["constantrate"] = @benchmarkable solve($jprob_cr, SSAStepper(); rng) setup=(rng = StableRNG(12345)) evals=1
+SUITE["solve"]["massaction"] = @benchmarkable solve($jprob_maj, SSAStepper(); rng) setup=(rng=StableRNG(12345)) evals=1
+SUITE["solve"]["constantrate"] = @benchmarkable solve($jprob_cr, SSAStepper(); rng) setup=(rng=StableRNG(12345)) evals=1
 
 # =============================================================================
 # Aggregators
@@ -63,8 +63,8 @@ jprob_rdirect = JumpProblem(dprob, RDirect(), maj)
 jprob_sorting = JumpProblem(dprob, SortingDirect(), maj)
 jprob_nrm = JumpProblem(dprob, NRM(), maj)
 
-SUITE["aggregators"]["RDirect"] = @benchmarkable solve($jprob_rdirect, SSAStepper(); rng) setup=(rng = StableRNG(12345)) evals=1
+SUITE["aggregators"]["RDirect"] = @benchmarkable solve($jprob_rdirect, SSAStepper(); rng) setup=(rng=StableRNG(12345)) evals=1
 SUITE["aggregators"]["SortingDirect"] = @benchmarkable solve(
     $jprob_sorting, SSAStepper(); rng
-) setup=(rng = StableRNG(12345)) evals=1
-SUITE["aggregators"]["NRM"] = @benchmarkable solve($jprob_nrm, SSAStepper(); rng) setup=(rng = StableRNG(12345)) evals=1
+) setup=(rng=StableRNG(12345)) evals=1
+SUITE["aggregators"]["NRM"] = @benchmarkable solve($jprob_nrm, SSAStepper(); rng) setup=(rng=StableRNG(12345)) evals=1

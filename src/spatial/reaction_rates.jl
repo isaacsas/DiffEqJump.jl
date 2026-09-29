@@ -4,16 +4,24 @@ A file with structs and functions for sampling reactions and updating reaction r
 
 ### spatial rx rates ###
 struct RxRates{F, M}
-    "rx_rates[i,j] is rate of reaction i at site j"
+    """
+    rx_rates[i,j] is rate of reaction i at site j
+    """
     rates::Matrix{F}
 
-    "rx_rates_sum[j] is sum of reaction rates at site j"
+    """
+    rx_rates_sum[j] is sum of reaction rates at site j
+    """
     sum_rates::Vector{F}
 
-    "AbstractMassActionJump"
+    """
+    AbstractMassActionJump
+    """
     ma_jumps::M
 
-    "working copy of scaled mass action jump rates"
+    """
+    working copy of scaled mass action jump rates
+    """
     maj_rates::Vector{F}
 end
 
@@ -95,9 +103,11 @@ function Base.show(io::IO, ::MIME"text/plain", rx_rates::RxRates)
     println(io, "RxRates with $num_rxs reactions and $num_sites sites")
 end
 
-function eval_massaction_rate(u, rx, ma_jumps::M, site, maj_rates) where {M <: SpatialMassActionJump}
+function eval_massaction_rate(
+        u, rx, ma_jumps::M, site, maj_rates) where {M <: SpatialMassActionJump}
     evalrxrate(u, rx, ma_jumps, site)
 end
-function eval_massaction_rate(u, rx, ma_jumps::M, site, maj_rates) where {M <: MassActionJump}
+function eval_massaction_rate(
+        u, rx, ma_jumps::M, site, maj_rates) where {M <: MassActionJump}
     evalrxrate((@view u[:, site]), rx, ma_jumps, maj_rates)
 end

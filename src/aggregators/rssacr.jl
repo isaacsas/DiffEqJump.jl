@@ -182,7 +182,8 @@ update bracketing for species that depend on the just executed jump
             # for each dependent jump, update jump rate brackets
             for jidx in p.vartojumps_map[uidx]
                 oldrate = crhigh[jidx]
-                p.cur_rate_low[jidx], crhigh[jidx] = get_jump_brackets(jidx, p, u, params, t)
+                p.cur_rate_low[jidx], crhigh[jidx] = get_jump_brackets(
+                    jidx, p, u, params, t)
 
                 # update the priority table
                 update!(p.rt, jidx, oldrate, crhigh[jidx])
@@ -210,7 +211,8 @@ end
             # for each dependent jump, update jump rate brackets
             for jidx in p.vartojumps_map[uidx]
                 oldrate = crhigh[jidx]
-                p.cur_rate_low[jidx], crhigh[jidx] = get_jump_brackets(jidx, p, u, params, t)
+                p.cur_rate_low[jidx], crhigh[jidx] = get_jump_brackets(
+                    jidx, p, u, params, t)
 
                 # update the priority table
                 update!(p.rt, jidx, oldrate, crhigh[jidx])

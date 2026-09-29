@@ -75,7 +75,7 @@ their own special time integrators.
 The constructor for a [`ConstantRateJump`](@ref) is:
 
 ```julia
-ConstantRateJump(rate, affect!; bounds=nothing)
+ConstantRateJump(rate, affect!; bounds = nothing)
 ```
 
   - `rate(u, p, t)` is a function which calculates the rate given the current
@@ -134,7 +134,7 @@ scaling and the removed `JumpProblem` constructor keywords.
     `k*A*(A-1)*(A-2)/3!`. To *avoid* having the reaction rates rescaled (by `1/2`
     and `1/6` for these two examples), one can pass the `MassActionJump`
     constructor the optional named parameter `scale_rates = false`, i.e., use
-    
+
     ```julia
     MassActionJump(reactant_stoich, net_stoich; scale_rates = false, param_idxs)
     ```
@@ -142,31 +142,32 @@ scaling and the removed `JumpProblem` constructor keywords.
   - Zero order reactions can be passed as `reactant_stoich`s in one of two ways.
     Consider the ``\varnothing \overset{k}{\rightarrow} A`` reaction with rate
     `k=1`:
-    
+
     ```julia
     p = [1.0]
     reactant_stoich = [[0 => 1]]
     net_stoich = [[1 => 1]]
     jump = MassActionJump(reactant_stoich, net_stoich; param_idxs = [1])
     ```
-    
+
     Alternatively, one can create an empty vector of pairs to represent the reaction:
-    
+
     ```julia
     p = [1.0]
     reactant_stoich = [Vector{Pair{Int, Int}}()]
     net_stoich = [[1 => 1]]
     jump = MassActionJump(reactant_stoich, net_stoich; param_idxs = [1])
     ```
+
   - For performance reasons, it is recommended to order species indices in
     stoichiometry vectors from smallest to largest. That is
-    
+
     ```julia
     reactant_stoich = [[1 => 2, 3 => 1, 4 => 2], [2 => 2, 3 => 2]]
     ```
-    
+
     is preferred over
-    
+
     ```julia
     reactant_stoich = [[3 => 1, 1 => 2, 4 => 2], [3 => 2, 2 => 2]]
     ```
@@ -492,29 +493,37 @@ as will trying to update either `p` or `tspan` while passing a new
 [^1]: V. Lemaire, M. Thieullen and N. Thomas, Exact Simulation of the Jump
     Times of a Class of Piecewise Deterministic Markov Processes, Journal of
     Scientific Computing, 75 (3), 1776-1807 (2018). doi:10.1007/s10915-017-0607-4.
+
 [^2]: D. T. Gillespie, A general method for numerically simulating the stochastic
     time evolution of coupled chemical reactions, Journal of Computational Physics,
     22 (4), 403–434 (1976). doi:10.1016/0021-9991(76)90041-3.
+
 [^3]: A. Slepoy, A.P. Thompson and S.J. Plimpton, A constant-time kinetic Monte
     Carlo algorithm for simulation of large biochemical reaction networks, Journal
     of Chemical Physics, 128 (20), 205101 (2008). doi:10.1063/1.2919546.
+
 [^4]: J. M. McCollum, G. D. Peterson, C. D. Cox, M. L. Simpson and N. F.
     Samatova, The sorting direct method for stochastic simulation of biochemical
     systems with varying reaction execution behavior, Computational Biology and
     Chemistry, 30 (1), 39049 (2006). doi:10.1016/j.compbiolchem.2005.10.007.
+
 [^5]: V. H. Thanh, C. Priami and R. Zunino, Efficient rejection-based simulation
     of biochemical reactions with stochastic noise and delays, Journal of Chemical
     Physics, 141 (13), 134116 (2014). doi:10.1063/1.4896985.
+
 [^6]: V. H. Thanh, R. Zunino and C. Priami, On the rejection-based algorithm for
     simulation and analysis of large-scale reaction networks, Journal of Chemical
     Physics, 142 (24), 244106 (2015). doi:10.1063/1.4922923.
+
 [^7]: V. H. Thanh, R. Zunino, and C. Priami, Efficient constant-time complexity
     algorithm for stochastic simulation of large reaction networks, IEEE/ACM
     Transactions on Computational Biology and Bioinformatics, 14 (3), 657-667
     (2017). doi:10.1109/TCBB.2016.2530066.
+
 [^8]: M. A. Gibson and J. Bruck, Efficient exact stochastic simulation of chemical
     systems with many species and many channels, Journal of Physical Chemistry A,
     104 (9), 1876-1889 (2000). doi:10.1021/jp993732q.
+
 [^9]: M. Farajtabar, Y. Wang, M. Gomez-Rodriguez, S. Li, H. Zha, and L. Song,
     COEVOLVE: a joint point process model for information diffusion and network
     evolution, Journal of Machine Learning Research 18(1), 1305–1353 (2017). doi:

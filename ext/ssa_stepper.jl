@@ -13,19 +13,33 @@ Rate constants are stored in the same floating point type as the problem's
 `tspan` so that rate and time arithmetic in the kernel share one type.
 """
 struct GPUMassActionJump{R, S, C, O}
-    """Rate constants, already scaled by the mass action combinatoric prefactors."""
+    """
+    Rate constants, already scaled by the mass action combinatoric prefactors.
+    """
     scaled_rates::R
-    """Flattened reactant species indices."""
+    """
+    Flattened reactant species indices.
+    """
     rs_species::S
-    """Flattened reactant stoichiometric coefficients."""
+    """
+    Flattened reactant stoichiometric coefficients.
+    """
     rs_coeffs::C
-    """CSR offsets into the reactant arrays, of length `numjumps + 1`."""
+    """
+    CSR offsets into the reactant arrays, of length `numjumps + 1`.
+    """
     rs_offsets::O
-    """Flattened net stoichiometry species indices."""
+    """
+    Flattened net stoichiometry species indices.
+    """
     ns_species::S
-    """Flattened net stoichiometric coefficients."""
+    """
+    Flattened net stoichiometric coefficients.
+    """
     ns_coeffs::C
-    """CSR offsets into the net stoichiometry arrays, of length `numjumps + 1`."""
+    """
+    CSR offsets into the net stoichiometry arrays, of length `numjumps + 1`.
+    """
     ns_offsets::O
 end
 

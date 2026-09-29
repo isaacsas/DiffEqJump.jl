@@ -6,7 +6,9 @@
 
 <!-- [![Coverage Status](https://coveralls.io/repos/github/SciML/JumpProcesses.jl/badge.svg?branch=master)](https://coveralls.io/github/SciML/JumpProcesses.jl?branch=master)
 [![codecov](https://codecov.io/gh/SciML/JumpProcesses.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/SciML/JumpProcesses.jl) -->
+
 <!-- [![Join the chat at https://julialang.zulipchat.com #sciml-bridged](https://img.shields.io/static/v1?label=Zulip&message=chat&color=9558b2&labelColor=389826)](https://julialang.zulipchat.com/#narrow/stream/279055-sciml-bridged) -->
+
 [![Build Status](https://github.com/SciML/JumpProcesses.jl/workflows/CI/badge.svg)](https://github.com/SciML/JumpProcesses.jl/actions?query=workflow%3ACI)
 [![ColPrac: Contributor's Guide on Collaborative Practices for Community Packages](https://img.shields.io/badge/ColPrac-Contributor%27s%20Guide-blueviolet)](https://github.com/SciML/ColPrac)
 [![SciML Code Style](https://img.shields.io/static/v1?label=code%20style&message=SciML&color=9558b2&labelColor=389826)](https://github.com/SciML/SciMLStyle)
@@ -37,7 +39,6 @@ The documentation includes
   - [the JumpProcesses.jl API documentation](https://docs.sciml.ai/JumpProcesses/stable/api/).
 
 ## Contributions welcomed!
-
 
 Contact us in sciml-bridged on Slack to discuss where to get started, the [`Help wanted`](https://github.com/SciML/JumpProcesses.jl/issues/431) issue, or just open a PR to address an open issue or add new functionality. Contributions, no matter how small, are always welcome and appreciated,
 including documentation editing/writing. See also the [contribution section](#contributing-and-getting-help).
@@ -167,8 +168,9 @@ plot(sol)
     for guidance on PRs, issues, and other matters relating to contributing to SciML.
 
   - See the [SciML Style Guide](https://github.com/SciML/SciMLStyle) for common coding practices and other style decisions.
+
   - There are a few community forums for getting help and asking questions:
-    
+
       + The #diffeq-bridged and #sciml-bridged channels in the
         [Julia Slack](https://julialang.org/slack/)
       + The #diffeq-bridged and #sciml-bridged channels in the

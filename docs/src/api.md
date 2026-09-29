@@ -158,11 +158,11 @@ sol = solve(jprob, SSAStepper(); seed = 1234)
 For SSAStepper, OrdinaryDiffEq ODE/DAE solvers, and all five CPU tau-leaping
 algorithms, an explicit `rng` takes priority over `seed`:
 
-| User provides | Result |
-|---|---|
-| `rng` via `solve`/`init` | Uses that `rng` |
-| `seed` via `solve`/`init` | Creates `Xoshiro(seed)` |
-| Nothing | Uses `Random.default_rng()` |
+| User provides             | Result                      |
+|:------------------------- |:--------------------------- |
+| `rng` via `solve`/`init`  | Uses that `rng`             |
+| `seed` via `solve`/`init` | Creates `Xoshiro(seed)`     |
+| Nothing                   | Uses `Random.default_rng()` |
 
 StochasticDiffEq handles SDE/RODE RNGs for both `solve` and `init`. An explicit
 RNG other than `TaskLocalRNG` takes priority over seeds. With no RNG, or with
@@ -175,15 +175,16 @@ solvers use `Xoshiro(0)`.
 
 ### Behavior by solver pathway
 
-| Solver | Default RNG (nothing passed) | `rng` / `seed` support |
-|---|---|---|
-| `SSAStepper` | `Random.default_rng()` | Full support via `solve`/`init` kwargs |
-| OrdinaryDiffEq ODE/DAE solvers (e.g., `Tsit5`, `DFBDF`) | `Random.default_rng()` | Full support via `solve`/`init` kwargs |
-| StochasticDiffEq SDE/RODE solvers (e.g., `SRIW1`, `RandomEM`) | `Xoshiro` from the stored problem seed, or a random seed | Full support; `TaskLocalRNG` follows the seed policy above and is converted to `Xoshiro` |
-| `SimpleTauLeaping` | `Random.default_rng()` | Full support via `solve` kwargs |
-| `SimpleExplicitTauLeaping`, `SimpleImplicitTauLeaping`, `SimpleTrapezoidalLeaping`, `SimpleAdaptiveTauLeaping` | `Random.default_rng()` | Full support via `solve` kwargs |
+| Solver                                                                                                         | Default RNG (nothing passed)                             | `rng` / `seed` support                                                                   |
+|:-------------------------------------------------------------------------------------------------------------- |:-------------------------------------------------------- |:---------------------------------------------------------------------------------------- |
+| `SSAStepper`                                                                                                   | `Random.default_rng()`                                   | Full support via `solve`/`init` kwargs                                                   |
+| OrdinaryDiffEq ODE/DAE solvers (e.g., `Tsit5`, `DFBDF`)                                                        | `Random.default_rng()`                                   | Full support via `solve`/`init` kwargs                                                   |
+| StochasticDiffEq SDE/RODE solvers (e.g., `SRIW1`, `RandomEM`)                                                  | `Xoshiro` from the stored problem seed, or a random seed | Full support; `TaskLocalRNG` follows the seed policy above and is converted to `Xoshiro` |
+| `SimpleTauLeaping`                                                                                             | `Random.default_rng()`                                   | Full support via `solve` kwargs                                                          |
+| `SimpleExplicitTauLeaping`, `SimpleImplicitTauLeaping`, `SimpleTrapezoidalLeaping`, `SimpleAdaptiveTauLeaping` | `Random.default_rng()`                                   | Full support via `solve` kwargs                                                          |
 
 !!! note
+
     Use an explicit `rng` or `seed` where the solver supports it, and start from
     identical model and mutable aggregator state. An explicit RNG is advanced
     by the solve; construct or copy it from the same starting state for replay.
@@ -215,13 +216,13 @@ The following table documents which code handles `solve`/`init` for each solver
 type. This is relevant for developers working on JumpProcesses or its solver
 backends.
 
-| Solver type | `__solve` handled by | `__init` handled by | Uses `__jump_init`? |
-|---|---|---|---|
-| `SSAStepper` | JumpProcesses (`solve.jl`) | JumpProcesses (`SSA_stepper.jl`) | No |
-| OrdinaryDiffEq ODE/DAE (e.g., `Tsit5`, `DFBDF`) | JumpProcesses (`solve.jl`) | JumpProcesses' OrdinaryDiffEqCore extension → OrdinaryDiffEq | Yes |
-| StochasticDiffEq SDE/RODE (e.g., `SRIW1`, `RandomEM`) | StochasticDiffEqCore | StochasticDiffEqCore's JumpProblem initializer | No |
-| StochasticDiffEq jump algorithms (e.g., `TauLeaping`) | StochasticDiffEqCore | StochasticDiffEqCore's specialized jump-algorithm initializer | No |
-| All five CPU tau-leaping algorithms | JumpProcesses (`simple_regular_solve.jl`, custom `DiffEqBase.solve`) | N/A | No |
+| Solver type                                           | `__solve` handled by                                                 | `__init` handled by                                           | Uses `__jump_init`? |
+|:----------------------------------------------------- |:-------------------------------------------------------------------- |:------------------------------------------------------------- |:------------------- |
+| `SSAStepper`                                          | JumpProcesses (`solve.jl`)                                           | JumpProcesses (`SSA_stepper.jl`)                              | No                  |
+| OrdinaryDiffEq ODE/DAE (e.g., `Tsit5`, `DFBDF`)       | JumpProcesses (`solve.jl`)                                           | JumpProcesses' OrdinaryDiffEqCore extension → OrdinaryDiffEq  | Yes                 |
+| StochasticDiffEq SDE/RODE (e.g., `SRIW1`, `RandomEM`) | StochasticDiffEqCore                                                 | StochasticDiffEqCore's JumpProblem initializer                | No                  |
+| StochasticDiffEq jump algorithms (e.g., `TauLeaping`) | StochasticDiffEqCore                                                 | StochasticDiffEqCore's specialized jump-algorithm initializer | No                  |
+| All five CPU tau-leaping algorithms                   | JumpProcesses (`simple_regular_solve.jl`, custom `DiffEqBase.solve`) | N/A                                                           | No                  |
 
 For **SSAStepper**, `rng` is resolved via `resolve_rng` in `SSA_stepper.jl`'s
 `__init` and stored on the [`SSAIntegrator`](@ref).

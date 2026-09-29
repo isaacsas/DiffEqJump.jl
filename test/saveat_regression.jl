@@ -77,16 +77,18 @@ end
         jprob = JumpProblem(prob, Direct(), jump; save_positions)
         # Each solve owns a fresh problem and RNG; keep access to its counters
         # even when this test is invoked on a worker thread.
-        sol = solve(jprob, SSAStepper(); saveat, save_start, save_end, rng, alias_jump = true)
+        sol = solve(
+            jprob, SSAStepper(); saveat, save_start, save_end, rng, alias_jump = true)
         sol, events, (rng.exponential_draws, rng.uniform_draws)
     end
 
     expected_events = [(0.25, 1), (0.75, 2)]
     expected_state(t) = t < 0.25 ? [0] : t < 0.75 ? [1] : [2]
 
-    @testset "event saves=$save_events, start=$save_start, end=$save_end" for
-            save_events in (false, true), save_start in (false, true),
-            save_end in (false, true)
+    @testset "event saves=$save_events, start=$save_start, end=$save_end" for save_events in (false, true),
+        save_start in (false, true),
+        save_end in (false, true)
+
         save_positions = (false, save_events)
         for saveat in ([0.5], [0.125, 0.5], [0.5, 1.0], 0.5, [0.0, 0.5, 1.0])
             sol, events, draws = simulate(saveat; save_positions, save_start, save_end)
@@ -108,7 +110,8 @@ end
     end
 
     @testset "Finalization after the last event" for save_start in (false, true),
-            save_end in (false, true)
+        save_end in (false, true)
+
         sol, events, draws = simulate([0.875]; save_start, save_end)
         expected_times = [0.875]
         save_start && pushfirst!(expected_times, 0.0)
@@ -129,7 +132,8 @@ end
     end
 
     @testset "No observation requests" for save_start in (false, true),
-            save_end in (false, true)
+        save_end in (false, true)
+
         expected_times = [0.25, 0.75]
         save_start && pushfirst!(expected_times, 0.0)
         save_end && push!(expected_times, 1.0)

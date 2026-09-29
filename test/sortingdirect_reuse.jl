@@ -24,8 +24,7 @@ function sortingdirect_reuse_problem(representation)
 end
 
 @testset "SortingDirect preserves learned search order" begin
-    @testset "$representation" for representation in
-            (:parameterized_massaction, :fixed_massaction, :constant)
+    @testset "$representation" for representation in (:parameterized_massaction, :fixed_massaction, :constant)
         jprob = sortingdirect_reuse_problem(representation)
         sol = solve(jprob, SSAStepper(); seed = 12345, alias_jump = true)
         @test SciMLBase.successful_retcode(sol)

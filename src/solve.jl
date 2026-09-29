@@ -15,8 +15,9 @@ function resolve_rng(rng, seed)
     end
 end
 
-SciMLBase.supports_solve_rng(jprob::JumpProblem, alg::SciMLBase.AbstractDEAlgorithm) =
+function SciMLBase.supports_solve_rng(jprob::JumpProblem, alg::SciMLBase.AbstractDEAlgorithm)
     SciMLBase.supports_solve_rng(jprob.prob, alg)
+end
 
 function SciMLBase.__solve(jump_prob::JumpProblem{IIP, P},
         alg::SciMLBase.AbstractDEAlgorithm;
@@ -41,8 +42,9 @@ function SciMLBase.__solve(jump_prob::JumpProblem{IIP, P},
     integrator.sol
 end
 
-SciMLBase.supports_solve_rng(jprob::JumpProblem, ::Nothing) =
+function SciMLBase.supports_solve_rng(jprob::JumpProblem, ::Nothing)
     jprob.prob isa SciMLBase.DiscreteProblem
+end
 
 # if passed a JumpProblem over a DiscreteProblem, and no aggregator is selected use
 # SSAStepper
@@ -56,7 +58,8 @@ function SciMLBase.__solve(jump_prob::JumpProblem; kwargs...)
 end
 
 function SciMLBase.__init(_jump_prob::JumpProblem{IIP, P},
-        alg::SciMLBase.AbstractDEAlgorithm; merge_callbacks = true, kwargs...) where {IIP, P}
+        alg::SciMLBase.AbstractDEAlgorithm; merge_callbacks = true, kwargs...) where {
+        IIP, P}
     # Merge jump_prob.kwargs with passed kwargs
     kwargs = DiffEqBase.merge_problem_kwargs(_jump_prob; merge_callbacks, kwargs...)
 
@@ -67,7 +70,6 @@ function __jump_init(_jump_prob::JumpProblem{IIP, P}, alg;
         callback = nothing, seed = nothing, rng = nothing,
         alias_jump = Threads.threadid() == 1,
         kwargs...) where {IIP, P}
-
     _rng = resolve_rng(rng, seed)
 
     if alias_jump

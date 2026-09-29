@@ -72,6 +72,7 @@ the DifferentialEquations.jl [docs](https://docs.sciml.ai/JumpProcesses/stable/)
 examples and commonly asked questions.
 
 !!! warning "Thread Safety"
+
     `JumpProblem` contains mutable state (aggregator data, callbacks) and is **not
     thread-safe**. A single `JumpProblem` instance must not be solved concurrently from
     multiple threads or tasks without first creating independent copies via `deepcopy`.
@@ -83,24 +84,42 @@ examples and commonly asked questions.
     state, and kernel ensembles have their own backend RNG rules.
 """
 mutable struct JumpProblem{iip, P, A, C, J <: Union{Nothing, AbstractJumpAggregator}, J1,
-        J2, J3, J4, K} <: SciMLBase.AbstractJumpProblem{P, J}
-    """The type of problem to couple the jumps to. For a pure jump process use `DiscreteProblem`, to couple to ODEs, `ODEProblem`, etc."""
+    J2, J3, J4, K} <: SciMLBase.AbstractJumpProblem{P, J}
+    """
+    The type of problem to couple the jumps to. For a pure jump process use `DiscreteProblem`, to couple to ODEs, `ODEProblem`, etc.
+    """
     prob::P
-    """The aggregator algorithm that determines the next jump times and types for `ConstantRateJump`s and `MassActionJump`s. Examples include `Direct`."""
+    """
+    The aggregator algorithm that determines the next jump times and types for `ConstantRateJump`s and `MassActionJump`s. Examples include `Direct`.
+    """
     aggregator::A
-    """The underlying state data associated with the chosen aggregator."""
+    """
+    The underlying state data associated with the chosen aggregator.
+    """
     discrete_jump_aggregation::J
-    """`CallBackSet` with the underlying `ConstantRate` and `VariableRate` jumps."""
+    """
+    `CallBackSet` with the underlying `ConstantRate` and `VariableRate` jumps.
+    """
     jump_callback::C
-    """The `ConstantRateJump`s."""
+    """
+    The `ConstantRateJump`s.
+    """
     constant_jumps::J1
-    """The `VariableRateJump`s."""
+    """
+    The `VariableRateJump`s.
+    """
     variable_jumps::J2
-    """The `RegularJump`s."""
+    """
+    The `RegularJump`s.
+    """
     regular_jump::J3
-    """The `MassActionJump`s."""
+    """
+    The `MassActionJump`s.
+    """
     massaction_jump::J4
-    """kwargs to pass on to solve call."""
+    """
+    kwargs to pass on to solve call.
+    """
     kwargs::K
 end
 function JumpProblem(p::P, a::A, dj::J, jc::C, cj::J1, vj::J2, rj::J3, mj::J4,
@@ -142,7 +161,8 @@ function DiffEqBase.remake(jprob::JumpProblem; u0 = missing, p = missing,
                 final_u0 = u0
             else
                 # Resolve symbolic maps if needed (handles [:X => 3.0], [sys.X => 3.0], Dict, etc.)
-                resolved_u0, _ = SciMLBase.updated_u0_p(prob, u0, missing; interpret_symbolicmap, use_defaults)
+                resolved_u0, _ = SciMLBase.updated_u0_p(
+                    prob, u0, missing; interpret_symbolicmap, use_defaults)
 
                 # Extract state values and wrap with fresh jump_u (resampled)
                 # This handles both:
@@ -157,9 +177,11 @@ function DiffEqBase.remake(jprob::JumpProblem; u0 = missing, p = missing,
 
                 final_u0 = remake_extended_u0(prob, state_vals)
             end
-            newprob = DiffEqBase.remake(prob; u0 = final_u0, p, interpret_symbolicmap, use_defaults, kwargs...)
+            newprob = DiffEqBase.remake(
+                prob; u0 = final_u0, p, interpret_symbolicmap, use_defaults, kwargs...)
         else
-            newprob = DiffEqBase.remake(prob; u0, p, interpret_symbolicmap, use_defaults, kwargs...)
+            newprob = DiffEqBase.remake(
+                prob; u0, p, interpret_symbolicmap, use_defaults, kwargs...)
         end
 
     else
@@ -237,7 +259,6 @@ function JumpProblem(prob, aggregator::AbstractAggregatorAlgorithm, jumps::JumpS
                          (false, true) : (true, true),
         spatial_system = nothing, hopping_constants = nothing,
         callback = nothing, tstops = nothing, use_vrj_bounds = true, kwargs...)
-
     if haskey(kwargs, :rng)
         throw(ArgumentError("`rng` is no longer a keyword argument for `JumpProblem`. Pass `rng` to `solve` or `init` instead, e.g. `solve(jprob, SSAStepper(); rng = my_rng)`."))
     end
@@ -317,7 +338,6 @@ function JumpProblem(prob, aggregator::PureLeaping, jumps::JumpSet;
                          (false, true) : (true, true),
         spatial_system = nothing, hopping_constants = nothing,
         callback = nothing, tstops = nothing, kwargs...)
-
     if haskey(kwargs, :rng)
         throw(ArgumentError("`rng` is no longer a keyword argument for `JumpProblem`. Pass `rng` to `solve` or `init` instead, e.g. `solve(jprob, SSAStepper(); rng = my_rng)`."))
     end
@@ -356,7 +376,7 @@ end
 
 aggregator(jp::JumpProblem{iip, P, A}) where {iip, P, A} = A
 
-@inline function extend_tstops!(tstops, jp::JumpProblem) 
+@inline function extend_tstops!(tstops, jp::JumpProblem)
     !(jp.jump_callback.discrete_callbacks isa Tuple{}) &&
         push!(tstops, jp.jump_callback.discrete_callbacks[1].condition.next_jump_time)
 end

@@ -833,11 +833,14 @@ outside the scope this tutorial.
 [^1]: D. J. Daley and D. Vere-Jones, An Introduction to the Theory of Point
     Processes: Volume I: Elementary Theory and Methods, Springer-Verlag
     (2003). doi:10.1007/b97277.
+
 [^2]: T., Björk, Point Processes and Jump Diffusions: An Introduction with
     Finance Applications, Cambridge University Press
     (2021). doi:10.1017/9781009002127.
+
 [^3]: F. B. Hanson, Applied Stochastic Processes and Control for
     Jump-Diffusions: Modeling, Analysis and Computation, Society for
     Industrial and Applied Mathematics (2007). doi:10.1137/1.9780898718638.
+
 [^4]: P. J. Laub, Y. Lee and T. Taimre, The Elements of Hawkes Processes,
     Springer International Publishing (2021). doi:10.1007/978-3-030-84639-8.

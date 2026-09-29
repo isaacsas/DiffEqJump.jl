@@ -146,8 +146,9 @@ Pkg.add("JumpProcesses")
     for guidance on PRs, issues, and other matters relating to contributing to SciML.
 
   - See the [SciML Style Guide](https://github.com/SciML/SciMLStyle) for common coding practices and other style decisions.
+
   - There are a few community forums for getting help and asking questions:
-    
+
       + The #diffeq-bridged and #sciml-bridged channels in the
         [Julia Slack](https://julialang.org/slack/)
       + The #diffeq-bridged and #sciml-bridged channels in the

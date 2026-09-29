@@ -134,7 +134,7 @@ end
 @testset "SDE + VR: different seeds → different trajectories" begin
     jprob = make_sde_vr_jump_prob()
     sols = [solve(jprob, SRIW1(); save_everystep = false,
-        rng = StableRNG(s)) for s in (100, 200, 300)]
+                rng = StableRNG(s)) for s in (100, 200, 300)]
     times = [first_jump_time(s) for s in sols]
     @test allunique(times)
 end
@@ -311,7 +311,7 @@ end
     @testset "SDE + VR" begin
         jprob = make_sde_vr_jump_prob()
         sols = [solve(jprob, SRIW1(); save_everystep = false,
-            seed = s) for s in (100, 200, 300)]
+                    seed = s) for s in (100, 200, 300)]
         times = [first_jump_time(s) for s in sols]
         @test allunique(times)
     end

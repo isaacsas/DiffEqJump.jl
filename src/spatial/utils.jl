@@ -6,13 +6,19 @@ A file with helper functions for spatial simulations
 stores info for a spatial jump
 """
 struct SpatialJump{J}
-    "source location"
+    """
+    source location
+    """
     src::J
 
-    "index of jump as a hop or reaction"
+    """
+    index of jump as a hop or reaction
+    """
     jidx::Int
 
-    "destination location, equal to src for within-site reactions"
+    """
+    destination location, equal to src for within-site reactions
+    """
     dst::J
 end
 

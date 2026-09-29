@@ -40,18 +40,19 @@ function ssa_smoke_problem(aggregator, representation)
     end
 
     rate_ab(u, p, t) = p[1] * u[1]
-    rate_ba(u, p, t) = p[2] * u[2]
+    rate_b_to_a(u, p, t) = p[2] * u[2]
     function affect_ab!(integrator)
         integrator.u[1] -= 1
         integrator.u[2] += 1
         nothing
     end
-    function affect_ba!(integrator)
+    function affect_b_to_a!(integrator)
         integrator.u[1] += 1
         integrator.u[2] -= 1
         nothing
     end
-    jumps = (ConstantRateJump(rate_ab, affect_ab!), ConstantRateJump(rate_ba, affect_ba!))
+    jumps = (ConstantRateJump(rate_ab, affect_ab!),
+        ConstantRateJump(rate_b_to_a, affect_b_to_a!))
     dep_graph = [[1, 2], [1, 2]]
     vartojumps_map = [[1], [2]]
     jumptovars_map = [[1, 2], [1, 2]]
@@ -59,9 +60,9 @@ function ssa_smoke_problem(aggregator, representation)
 end
 
 @testset "Nonspatial SSA aggregator smoke" begin
-    @testset "$(typeof(aggregator)): $representation" for
-            aggregator in JumpProcesses.JUMP_AGGREGATORS,
-            representation in (:parameterized_massaction, :constant)
+    @testset "$(typeof(aggregator)): $representation" for aggregator in JumpProcesses.JUMP_AGGREGATORS,
+        representation in (:parameterized_massaction, :constant)
+
         check_ssa_smoke_problem(ssa_smoke_problem(aggregator, representation))
     end
 
@@ -73,9 +74,9 @@ end
 @testset "Automatic SSA selection smoke" begin
     # Duplicate A -> B channels keep the total rate fixed while crossing the
     # reaction-count thresholds for Direct, RSSA, and RSSACR.
-    @testset "$num_reactions reactions" for
-            (num_reactions, expected_aggregator) in ((19, Direct), (20, RSSA),
-                (99, RSSA), (100, RSSACR))
+    @testset "$num_reactions reactions" for (num_reactions, expected_aggregator) in ((
+        19, Direct), (20, RSSA),
+        (99, RSSA), (100, RSSACR))
         p = fill(0.7 / num_reactions, num_reactions)
         prob = DiscreteProblem([20, 0], (0.0, 0.5), p)
         reactant_stoch = [[1 => 1] for _ in 1:num_reactions]

@@ -74,45 +74,81 @@ $(FIELDS)
 """
 mutable struct SSAIntegrator{F, uType, tType, tdirType, P, S, CB, SA, OPT, TS, R} <:
                AbstractSSAIntegrator{SSAStepper, Nothing, uType, tType}
-    """The underlying `prob.f` function. Not currently used."""
+    """
+    The underlying `prob.f` function. Not currently used.
+    """
     f::F
-    """The current solution values."""
+    """
+    The current solution values.
+    """
     u::uType
-    """The current solution time."""
+    """
+    The current solution time.
+    """
     t::tType
-    """The previous time a jump occurred."""
+    """
+    The previous time a jump occurred.
+    """
     tprev::tType
-    """The direction time is changing in (must be positive, indicating time is increasing)"""
+    """
+    The direction time is changing in (must be positive, indicating time is increasing)
+    """
     tdir::tdirType
-    """The current parameters."""
+    """
+    The current parameters.
+    """
     p::P
-    """The current solution object."""
+    """
+    The current solution object.
+    """
     sol::S
     i::Int
-    """The next jump time."""
+    """
+    The next jump time.
+    """
     tstop::tType
-    """The jump aggregator callback."""
+    """
+    The jump aggregator callback.
+    """
     cb::CB
-    """Times to save the solution at."""
+    """
+    Times to save the solution at.
+    """
     saveat::SA
-    """Whether to save every time a jump occurs."""
+    """
+    Whether to save every time a jump occurs.
+    """
     save_everystep::Bool
-    """Whether to save at the final step."""
+    """
+    Whether to save at the final step.
+    """
     save_end::Bool
-    """Index of the next `saveat` time."""
+    """
+    Index of the next `saveat` time.
+    """
     cur_saveat::Int
-    """Tuple storing callbacks."""
+    """
+    Tuple storing callbacks.
+    """
     opts::OPT
-    """User supplied times to step to, useful with callbacks."""
+    """
+    User supplied times to step to, useful with callbacks.
+    """
     tstops::TS
     tstops_idx::Int
     u_modified::Bool
     keep_stepping::Bool          # false if should terminate a simulation
-    """If true, will write tstops into the user-passed array"""
+    """
+    If true, will write tstops into the user-passed array
+    """
     alias_tstops::Bool
-    """If true indicates we have already allocated the tstops array"""
+    """
+    If true indicates we have already allocated the tstops array
+    """
     copied_tstops::Bool
-    """The random number generator."""
+    """
+    The random number generator.
+    """
     rng::R
 end
 
@@ -187,7 +223,7 @@ function DiffEqBase.solve!(integrator::SSAIntegrator)
         if integrator.saveat !== nothing && !isempty(integrator.saveat)
             # Split to help prediction
             while integrator.cur_saveat <= length(integrator.saveat) &&
-                integrator.saveat[integrator.cur_saveat] < integrator.t
+                  integrator.saveat[integrator.cur_saveat] < integrator.t
                 push!(integrator.sol.t, integrator.saveat[integrator.cur_saveat])
                 push!(integrator.sol.u, copy(integrator.u))
                 integrator.cur_saveat += 1
@@ -402,7 +438,7 @@ function DiffEqBase.step!(integrator::SSAIntegrator)
     @inbounds if integrator.saveat !== nothing && !isempty(integrator.saveat)
         # Split to help prediction
         while integrator.cur_saveat <= length(integrator.saveat) &&
-            integrator.saveat[integrator.cur_saveat] < integrator.t
+              integrator.saveat[integrator.cur_saveat] < integrator.t
             push!(integrator.sol.t, integrator.saveat[integrator.cur_saveat])
             push!(integrator.sol.u, copy(integrator.u))
             integrator.cur_saveat += 1
@@ -477,7 +513,6 @@ function DiffEqBase.terminate!(integrator::SSAIntegrator, retcode = ReturnCode.T
     integrator.sol = SciMLBase.solution_new_retcode(integrator.sol, retcode)
     nothing
 end
-
 
 function SciMLBase.isdenseplot(sol::ODESolution{
         T, N, uType, uType2, DType, tType, rateType, discType, P,

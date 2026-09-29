@@ -189,9 +189,10 @@ end
     # Check jump_u thresholds directly via init (callback sets them during initialization)
     rng = StableRNG(12345)
     thresholds = [begin
-            integrator = init(jprob, Tsit5(); rng)
-            integrator.u.jump_u[1]
-        end for _ in 1:3]
+                      integrator = init(jprob, Tsit5(); rng)
+                      integrator.u.jump_u[1]
+                  end
+                  for _ in 1:3]
     @test allunique(thresholds)
 
     # From a full ensemble solve, check both first event times and the
