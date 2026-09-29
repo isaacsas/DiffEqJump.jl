@@ -1,11 +1,9 @@
 name: Documentation
 
 on:
-  push:
-    branches:
-      - master
-    tags: '*'
-  pull_request:
+  # Restore push (master and tags) and pull_request after ModelingToolkitBase
+  # supports the v10 JumpProblem and mapper APIs used by the Catalyst tutorial.
+  workflow_dispatch:
 
 jobs:
   build:

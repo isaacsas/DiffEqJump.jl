@@ -18,5 +18,19 @@ concurrency:
 
 jobs:
   tests:
-    uses: "SciML/.github/.github/workflows/grouped-tests.yml@v1"
+    # Restore grouped-tests.yml and test/test_groups.toml's full matrix after
+    # OrdinaryDiffEq.jl#4614 is released and the temporary Core source is removed.
+    strategy:
+      fail-fast: false
+      matrix:
+        group: ["QA", "InterfaceI", "InterfaceII"]
+    name: "${{ matrix.group }} (latest Julia)"
+    uses: "SciML/.github/.github/workflows/tests.yml@v1"
+    with:
+      project: "."
+      group: "${{ matrix.group }}"
+      julia-version: "1"
+      num-threads: "1"
+      coverage-directories: "src,ext"
+      timeout-minutes: 120
     secrets: "inherit"
