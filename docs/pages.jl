@@ -10,5 +10,6 @@ pages = ["index.md",
     "Type Documentation" => Any["Jumps, JumpProblem, and Aggregators" => "jump_types.md",
         "Jump solvers" => "jump_solve.md"],
     "FAQ" => "faq.md",
+    "Migrating to 10.0" => "migration.md",
     "API" => "api.md"
 ]

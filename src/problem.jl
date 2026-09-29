@@ -28,7 +28,7 @@ transition rates are constant *between* jumps (called [`ConstantRateJump`](@ref)
 [`DiscreteProblem`](https://docs.sciml.ai/DiffEqDocs/stable/types/discrete_types/)
 
 ```julia
-prob = DiscreteProblem(u0, p, tspan)
+prob = DiscreteProblem(u0, tspan, p)
 ```
 
 where `u0` is the initial condition, `p` the parameters and `tspan` the time span. If we
@@ -75,10 +75,12 @@ examples and commonly asked questions.
     `JumpProblem` contains mutable state (aggregator data, callbacks) and is **not
     thread-safe**. A single `JumpProblem` instance must not be solved concurrently from
     multiple threads or tasks without first creating independent copies via `deepcopy`.
-    When running ensemble simulations via `EnsembleProblem`, this is handled automatically
-    — the `SciMLBase` ensemble layer provides per-task isolation and per-trajectory RNG
-    seeding. This warning only applies to manually parallelized `solve` calls outside the
-    ensemble interface.
+    With `EnsembleProblem`, `safetycopy = true` requests a separate problem copy
+    per trajectory. If using `safetycopy = false`, the caller's
+    `prob_func` and solver settings must provide the required isolation. CPU ensemble
+    methods can assign separate RNGs to trajectories; a custom `rng_func` must not
+    return one shared mutable RNG. Separate RNGs alone do not isolate mutable jump
+    state, and kernel ensembles have their own backend RNG rules.
 """
 mutable struct JumpProblem{iip, P, A, C, J <: Union{Nothing, AbstractJumpAggregator}, J1,
         J2, J3, J4, K} <: SciMLBase.AbstractJumpProblem{P, J}

@@ -469,7 +469,14 @@ $(FIELDS)
   `reactant_stoch` from the input. Note, if `scale_rates=true` this will
   potentially modify both of these.
 - `param_idxs = nothing`, indexes in the parameter vector, `JumpProblem.prob.p`,
-  that correspond to each reaction's rate.
+  that correspond to each reaction's rate; a scalar index is accepted for one reaction.
+- `param_mapper = nothing`, an alternative to `param_idxs`: a callable
+  `(dest, maj, params)` that fills the final scaled working rates in `dest` and
+  returns `nothing`. It must not mutate the definition or input parameters.
+- `rescale_rates_on_update = scale_rates`, the scaling policy used by the built-in
+  parameter mapper. Custom mappers implement their own scaling and should honor
+  this policy when mapping unscaled coefficients; pre-scaled output must not be
+  scaled again.
 
 See the tutorial and main docs for details.
 
@@ -495,8 +502,9 @@ jprob = JumpProblem(prob, Direct(), maj)
 ```
 
 ## Notes
-- By default, reaction rates are rescaled when constructing the `MassActionJump`
-  as explained in the [main
+- By default, fixed reaction rates are rescaled when constructing the `MassActionJump`;
+  the built-in parameter mapper rescales rates when filling each solver's working
+  buffer at initialization/reset, as explained in the [main
   docs](https://docs.sciml.ai/JumpProcesses/stable/jump_types/#Defining-a-Mass-Action-Jump).
   Disable this with the kwarg `scale_rates=false`.
 - Also see the [main
@@ -507,11 +515,11 @@ jprob = JumpProblem(prob, Direct(), maj)
 """
 struct MassActionJump{T, S, U, V} <: AbstractMassActionJump
     """
-    The (scaled) reaction rate constants. When stored within a `JumpProblem`, this vector is
-    shared across remade problems. Users are responsible for maintaining consistent
-    stoichiometric scaling and thread safety if mutating directly. In general, prefer using
-    the parameter index or mapping form for rates that need to change, rather than mutating
-    `scaled_rates` directly.
+    The stored (scaled) fixed reaction rate constants, or `nothing` for a
+    parameter-mapped definition. Numeric working rates live in solver/aggregator
+    buffers and are refreshed at initialization/reset. Stored definition arrays
+    can be shared across remade problems; do not mutate them during concurrent
+    solves. Prefer parameter indices or a custom mapper for rates that change.
     """
     scaled_rates::T
     """The reactant stoichiometry vectors."""
@@ -657,12 +665,15 @@ Implements the in-place mapper callable API:
 which is called by [`fill_scaled_rates!`](@ref) during aggregator initialization
 and reinitialization to populate the working rate vector from parameters.
 
-`dest` should be filled with the current rates for each reaction. If
-`maj.rescale_rates_on_update` is `true`, the mapper should also apply
-stoichiometric scaling via [`scalerates!`](@ref).
+`dest` must contain the final scaled coefficients for each reaction. The
+built-in mapper extracts parameter values and applies stoichiometric scaling
+via `scalerates!` when `maj.rescale_rates_on_update` is `true`.
 
 Custom mappers (e.g. ModelingToolkitBase's `JumpSysMajParamMapper`) should
 implement this 3-arg callable to support parameterized `MassActionJump`s.
+They own their scaling policy: `fill_scaled_rates!` does not scale their output
+again. A mapper producing pre-scaled coefficients should use `scale_rates = false`
+and avoid applying the stoichiometric factors a second time.
 """
 struct MassActionJumpParamMapper{U}
     param_idxs::U

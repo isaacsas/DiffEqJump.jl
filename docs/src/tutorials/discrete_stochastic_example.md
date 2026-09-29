@@ -477,6 +477,11 @@ function that gets evaluated is
 with ``\hat{k} = k / \prod_{i=1}^{N} R_i!`` the renormalized rate constant.
 Passing the keyword argument `scale_rates = false` will disable
 `MassActionJump`s internally rescaling the rate constant by ``(\prod_{i=1}^{N} R_i!)^{-1}``.
+Set this keyword on `MassActionJump`, not `JumpProblem`. For the `param_idxs`
+form used here, scaling is applied when the solver fills its working rates
+from the current parameters at initialization or a jump-state reset. If a
+callback changes those parameters, call `reset_aggregated_jumps!(integrator)`
+after the change; no `update_jump_params` keyword is needed.
 
 For chemical reaction systems Catalyst.jl automatically groups reactions
 into their optimal jump representation.

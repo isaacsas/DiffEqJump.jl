@@ -75,7 +75,11 @@ sol = solve(jprob, SSAStepper(); rng = StableRNG(1234))
 A `seed` keyword argument is also supported as a shorthand for creating a `Xoshiro`
 generator: `solve(jprob, SSAStepper(); seed = 1234)`.
 
-By default, JumpProcesses uses Julia's built-in `Random.default_rng()`.
+By default, `SSAStepper`, the OrdinaryDiffEq ODE/DAE pathway, and all five CPU
+tau-leaping solvers use Julia's built-in `Random.default_rng()`.
+SDE/RODE solvers follow StochasticDiffEq's RNG/seed policy, and GPU kernel
+ensembles have backend-specific controls; see
+[Random Number Generator Control](@ref).
 
 ## What are these aggregators and aggregations in JumpProcesses?
 
@@ -132,6 +136,11 @@ When using an ODE or SDE time stepper, any callback should work.
 [`reset_aggregated_jumps!`](@ref) after making updates.* This ensures that the
 underlying jump simulation algorithms know to reinitialize their internal data
 structures. Omitting this call will lead to incorrect behavior!
+
+The reset refreshes parameter-mapped mass-action working rates from the current
+parameters. The former `update_jump_params` keyword is no longer accepted; no
+flag is needed. Fixed coefficients remain fixed. See the
+[10.0 migration guide](@ref migration_v10) for mapper and constructor changes.
 
 A simple example that uses a `MassActionJump` and changes the parameters at a
 specified time in the simulation using a `DiscreteCallback` is

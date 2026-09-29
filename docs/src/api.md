@@ -126,7 +126,9 @@ from SciMLBase directly.
 ## Random Number Generator Control
 
 JumpProcesses supports controlling the random number generator (RNG) used for
-jump sampling via the `rng` and `seed` keyword arguments to `solve` or `init`.
+jump sampling via the `rng` and `seed` keyword arguments to `solve` or `init`,
+as supported by the solver pathway below. `JumpProblem` no longer accepts `rng`;
+see [Migrating to JumpProcesses 10](@ref migration_v10).
 
 ### `rng` keyword argument
 
@@ -168,7 +170,8 @@ RNG other than `TaskLocalRNG` takes priority over seeds. With no RNG, or with
 underlying problem's nonzero `seed`; otherwise StochasticDiffEq creates a
 randomly seeded `Xoshiro`. It converts `TaskLocalRNG` to `Xoshiro` rather than
 storing it on the stochastic integrator. In this pathway, `seed=0` means no
-seed override, whereas SSAStepper and the ODE/DAE pathway use `Xoshiro(0)`.
+seed override, whereas SSAStepper, the ODE/DAE pathway, and CPU tau-leaping
+solvers use `Xoshiro(0)`.
 
 ### Behavior by solver pathway
 
@@ -181,8 +184,24 @@ seed override, whereas SSAStepper and the ODE/DAE pathway use `Xoshiro(0)`.
 | `SimpleExplicitTauLeaping`, `SimpleImplicitTauLeaping`, `SimpleTrapezoidalLeaping`, `SimpleAdaptiveTauLeaping` | `Random.default_rng()` | Full support via `solve` kwargs |
 
 !!! note
-    For reproducible simulations, always pass an explicit `rng` or `seed`.
+    Use an explicit `rng` or `seed` where the solver supports it, and start from
+    identical model and mutable aggregator state. An explicit RNG is advanced
+    by the solve; construct or copy it from the same starting state for replay.
     Julia's default RNG is task-local; results may depend on prior draws in the task.
+    `SortingDirect` retains its learned search order, which can also affect replay.
+
+### Kernel ensembles
+
+Multi-trajectory [`EnsembleGPUKernel`](@ref) solves use backend-local RNGs and
+reject host `rng` and `rng_func` inputs. With `KernelAbstractions.CPU()`, `seed`
+seeds Julia's task-local RNG. Replay assumes the same thread count, workload
+and trajectory count, CPU backend settings, and Julia/package versions;
+identical trajectories across thread counts are not guaranteed. This differs
+from CPU ensemble methods that assign RNGs explicitly to each trajectory.
+
+GPU device backends reject `seed` with `ArgumentError`; seed the backend
+before solving, for example with `CUDA.seed!`. With `trajectories = 1`, the
+serial CPU fallback accepts its usual RNG/seed inputs.
 
 # Private / Developer API
 
@@ -224,6 +243,13 @@ to `true` to reuse the original jump state. When that field is unspecified, the
 backend aliases on thread 1 and copies on other threads. Both `solve` and `init`
 follow this policy; `alias_jumps` is a field of the specifier, not a standalone
 keyword argument.
+
+The singular `alias_jump` keyword is no longer consumed on the SDE `init`
+path; use the backend alias specifier above. JumpProcesses-owned SSAStepper
+and ODE/DAE initialization retain `alias_jump`, defaulting to `true` on
+thread 1 and `false` on other threads. Independent mutable jump state is
+still required for concurrent solves, including when using
+`EnsembleProblem(...; safetycopy = false)`.
 
 For **tau-leaping**, JumpProcesses defines a custom `DiffEqBase.solve` that
 bypasses the standard `__solve`/`__init` pathway. It calls `resolve_rng`

@@ -1123,12 +1123,20 @@ Ensemble algorithm marker for GPU execution of tau-leaping ensemble simulations.
 
 ## Random number generation
 
-Kernel ensembles use backend-local RNGs and reject explicit host `rng` and
-`rng_func` keywords.
-The `seed` solve keyword is supported with the KernelAbstractions CPU backend;
-other backends require their own seeding API and reject `seed`. With
-`trajectories = 1`, execution uses the serial CPU solver, which accepts its
-usual `rng`, `seed`, and ensemble `rng_func` keywords.
+For multiple trajectories, kernel ensembles use backend-local RNGs and reject
+explicit host `rng` and `rng_func` keywords. The `seed` solve keyword is supported
+with the KernelAbstractions CPU backend and seeds Julia's task-local generator.
+CPU-kernel replay with the same seed requires the same thread count, workload
+(including trajectory count), CPU backend settings, and Julia and package
+versions. Identical trajectories across thread counts are not guaranteed. These
+conditions apply to CPU kernel execution; CPU ensemble algorithms that explicitly
+assign RNGs to trajectories have their own RNG behavior.
+
+Device backends reject `seed` with `ArgumentError`. Seed the device RNG through
+the backend's API, such as `CUDA.seed!`, before calling `solve`.
+
+With `trajectories = 1`, execution delegates to `EnsembleSerial()` on the CPU
+and accepts its usual `rng`, `seed`, and ensemble `rng_func` keywords.
 
 ## Returns
 

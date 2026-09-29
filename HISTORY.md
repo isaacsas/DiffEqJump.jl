@@ -2,6 +2,10 @@
 
 ## 10.0 (Breaking)
 
+This section describes the forthcoming 10.0 release. During integration,
+`Project.toml` retains version 9.33.1 for development and testing; these breaking
+changes are not intended for a 9.x release.
+
   - **Breaking**: The `rng` keyword argument has been removed from
     `JumpProblem`. Pass `rng` to `solve` or `init` instead:
     ```julia
@@ -13,14 +17,46 @@
     jprob = JumpProblem(dprob, Direct(), jump)
     sol = solve(jprob, SSAStepper(); rng = Xoshiro(1234))
     ```
-  - RNG state is now owned by the integrator, not the aggregator. This
-    eliminates data races when sharing a `JumpProblem` across threads and
-    ensures a single, consistent RNG priority across all solver pathways:
-    `rng` > `seed` > `Random.default_rng()`.
-  - `rng` and `seed` kwargs are fully supported on `solve`/`init` for all
-    solver pathways (SSAStepper, ODE, SDE, tau-leaping).
+  - **Breaking**: `JumpProcesses.DEFAULT_RNG` has been removed. Custom jump
+    affects should draw from `SciMLBase.get_rng(integrator)`. Add SciMLBase as
+    a direct project dependency and load it with `using SciMLBase` to use this
+    interface. Pass `rng` or `seed` to `solve`/`init` to control the solver's RNG.
+  - Jump callbacks now sample from the integrator's RNG. `JumpProblem`s,
+    aggregators, and callbacks no longer store their own RNGs. Aggregators and
+    callbacks still contain mutable working state, so concurrent solves must
+    isolate that state; sharing an arbitrary `JumpProblem` across threads or
+    tasks is not made safe by this change.
+  - `SSAStepper` and the OrdinaryDiffEq ODE/DAE pathways accept `rng` and `seed`
+    through `solve`/`init`; all five CPU tau-leaping algorithms accept them
+    through `solve`. These pathways use `rng` first, then `Xoshiro(seed)` if a
+    seed is supplied, then `Random.default_rng()`.
+  - StochasticDiffEq SDE/RODE `solve` and `init` follow the backend's RNG policy.
+    An explicit RNG other than `TaskLocalRNG` takes priority over seeds. With
+    no RNG or with `TaskLocalRNG`, a nonzero solve/init seed takes priority,
+    followed by the underlying problem's nonzero seed, then a randomly seeded
+    `Xoshiro`. `TaskLocalRNG` is converted to `Xoshiro`; `seed = 0` means no seed
+    override on this pathway, whereas the JumpProcesses RNG resolver uses
+    `Xoshiro(0)`.
+  - **Breaking**: The singular `alias_jump` keyword is no longer consumed on
+    the StochasticDiffEq `init` pathway. For SDE jump-state copying, pass
+    `alias = SciMLBase.SDEAliasSpecifier(; alias_jumps = false)` to `solve` or
+    `init`; use `alias_jumps = true` in the specifier to reuse jump state. RODE
+    problems use `SciMLBase.RODEAliasSpecifier`. Other JumpProcesses-owned
+    pathways retain their existing `alias_jump` behavior.
   - `SSAIntegrator` now supports the `SciMLBase` RNG interface (`has_rng`,
     `get_rng`, `set_rng!`).
+  - **Breaking**: Passing `seed` to a multi-trajectory `EnsembleGPUKernel`
+    solve with a GPU device backend now raises `ArgumentError`, instead of
+    accepting a seed that does not control the device RNG. This applies to
+    `SSAStepper`, `SimpleTauLeaping`, and `SimpleExplicitTauLeaping`. Seed the
+    device through the backend's API before solving (for example,
+    `CUDA.seed!`). Multi-trajectory kernel solves also reject host `rng`
+    objects and `rng_func`. The `CPU()` backend still supports `seed` using
+    Julia's task-local RNG; repeatability requires the same thread count,
+    workload/trajectory count, CPU backend settings, and Julia/package versions.
+    Identical trajectories across thread counts are not guaranteed. With `trajectories = 1`,
+    `EnsembleGPUKernel` retains its serial CPU fallback and that pathway's
+    usual RNG/seed rules.
   - **Breaking**: The `scale_rates` and `useiszero` keyword arguments have been
     removed from `JumpProblem`. Set them on the `MassActionJump` directly:
     ```julia
@@ -32,18 +68,27 @@
     jprob = JumpProblem(dprob, Direct(), maj)
     ```
   - **Breaking**: Parameterized `MassActionJump`s (those constructed with
-    `param_idxs` or a custom `param_mapper`) are now immutable — rates are
-    computed from parameters at aggregator initialization rather than being
-    materialized into the jump at `JumpProblem` construction time. This means:
+    `param_idxs` or a custom `param_mapper`) retain `scaled_rates === nothing`.
+    Solvers and aggregators own the working rate buffers and fill them from
+    current parameters at initialization and reset. `remake` no longer mutates
+    shared rate coefficients in the jump definition. Fixed-rate and symbolic
+    definitions retain their supported `scaled_rates` representation. This means:
       - `update_parameters!` has been removed. Mass action rates are now
         automatically recomputed from the current parameter values whenever the
         aggregator reinitializes. After modifying parameters (e.g. in a
         callback), call `reset_aggregated_jumps!(integrator)` to trigger
         reinitialization with the updated parameter values.
+      - The `update_jump_params` keyword has been removed from
+        `reset_aggregated_jumps!`; supplying either `true` or `false` raises an
+        explanatory error. Rate refresh is automatic during reset.
       - Custom parameter mappers (e.g. ModelingToolkitBase's
-        `JumpSysMajParamMapper`) must implement the 3-arg callable API:
-        `(mapper)(dest::AbstractVector, maj::MassActionJump, params)`.
-        See [`MassActionJumpParamMapper`](@ref) for details.
+        `JumpSysMajParamMapper`) must replace the old extraction/mutation
+        callables with `(mapper)(dest::AbstractVector, maj::MassActionJump, params)`
+        and fill `dest` with the scaled rates. The built-in mapper honors
+        `maj.rescale_rates_on_update`; custom mappers own their scaling policy
+        and must avoid scaling already-scaled symbolic expressions twice.
+        See the [custom mapper migration guide](docs/src/migration.md#custom-parameter-mappers)
+        for an example.
   - Scalar `param_idxs` (e.g. `param_idxs = 1`) is now internally converted to
     a one-element vector. The scalar form continues to work as before.
 

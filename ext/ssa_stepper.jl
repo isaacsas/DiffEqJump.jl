@@ -269,11 +269,18 @@ grid points, as if the problem had been built with
 also ignored, since the kernel always runs the Direct method.
 
 For multiple trajectories, randomness comes from the backend's own RNG. `seed`
-is supported with `CPU()` and seeds Julia's task-local generator; device backends
-must be seeded through their own API before calling `solve` (for example,
-`CUDA.seed!`). Passing a host `rng` or `rng_func`, or `seed` with a device backend,
-is rejected.
-A single trajectory uses `EnsembleSerial()` and its usual solve-level RNG inputs.
+is supported with `CPU()` and seeds Julia's task-local generator. CPU-kernel replay
+with the same seed requires the same thread count, workload (including trajectory
+count), CPU backend settings, and Julia and package versions. Identical trajectories
+across thread counts are not guaranteed. These conditions apply to CPU kernel
+execution; CPU ensemble algorithms that explicitly assign RNGs to trajectories
+have their own RNG behavior.
+
+Device backends must be seeded through their own API before calling `solve`
+(for example, `CUDA.seed!`). Passing a host `rng` or `rng_func`, or `seed` with a
+device backend, raises `ArgumentError`. With `trajectories = 1`, execution delegates
+to `EnsembleSerial()` on the CPU and accepts its usual `rng`, `seed`, and ensemble
+`rng_func` keywords.
 
 The reaction data is uploaded to the device once and shared by every thread, so
 all trajectories solve the same problem and a `prob_func` is not supported.
