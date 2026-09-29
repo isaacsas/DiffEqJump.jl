@@ -11,7 +11,8 @@ the timestep through the `dt` keyword to `solve`.
 The algorithm constructor has no fields or keyword arguments. The `solve` method accepts:
 
   - `dt`: Required fixed timestep.
-  - `seed`: Optional random seed for the jump problem RNG.
+  - `rng`: Optional RNG used by this solve; takes precedence over `seed`.
+  - `seed`: Optional seed used to construct a solve-local RNG.
   - `saveat`: Optional scalar interval or collection of save times.
   - `save_start`: Whether to save the initial time. Defaults follow SciML save conventions.
   - `save_end`: Whether to save the final time. Defaults follow SciML save conventions.
@@ -127,6 +128,8 @@ end
 
 SimpleImplicitTauLeaping(; epsilon = 0.05) = SimpleImplicitTauLeaping(epsilon)
 
+SciMLBase.supports_solve_rng(::JumpProblem, ::SimpleImplicitTauLeaping) = true
+
 """
     SimpleTrapezoidalLeaping(; epsilon = 0.05)
 
@@ -168,6 +171,8 @@ struct SimpleTrapezoidalLeaping{T <: AbstractFloat} <: SciMLBase.AbstractDEAlgor
 end
 
 SimpleTrapezoidalLeaping(; epsilon = 0.05) = SimpleTrapezoidalLeaping(epsilon)
+
+SciMLBase.supports_solve_rng(::JumpProblem, ::SimpleTrapezoidalLeaping) = true
 
 """
 $(TYPEDEF)
@@ -233,6 +238,8 @@ function SimpleAdaptiveTauLeaping(;
     SimpleAdaptiveTauLeaping(epsilon, implicit_alg, eigenvalue_check,
         stiffness_ratio_threshold, implicit_epsilon_factor)
 end
+
+SciMLBase.supports_solve_rng(::JumpProblem, ::SimpleAdaptiveTauLeaping) = true
 
 function validate_pure_leaping_inputs(jump_prob::JumpProblem, alg)
     if !(jump_prob.aggregator isa PureLeaping)
@@ -773,7 +780,7 @@ end
 function DiffEqBase.solve(
         jump_prob::JumpProblem,
         alg::Union{SimpleImplicitTauLeaping, SimpleTrapezoidalLeaping};
-        seed = nothing,
+        seed = nothing, rng = nothing,
         dtmin = nothing,
         saveat = nothing, save_start = nothing, save_end = nothing
     )
@@ -781,18 +788,18 @@ function DiffEqBase.solve(
         error("$(nameof(typeof(alg))) can only be used with PureLeaping JumpProblem with a MassActionJump.")
 
     prob = jump_prob.prob
-    rng = jump_prob.rng
+    _rng = resolve_rng(rng, seed)
     tspan = prob.tspan
 
     if dtmin === nothing
         dtmin = 1.0e-10 * one(typeof(tspan[2]))
     end
 
-    (seed !== nothing) && seed!(rng, seed)
-
     maj = jump_prob.massaction_jump
     numjumps = get_num_majumps(maj)
-    rate = massaction_rate(maj, numjumps)
+    maj_rates = Vector{typeof(tspan[2])}(undef, numjumps)
+    fill_scaled_rates!(maj_rates, maj, prob.p)
+    rate = massaction_rate(maj, maj_rates, numjumps)
     u0 = copy(prob.u0)
     p = prob.p
 
@@ -828,7 +835,7 @@ function DiffEqBase.solve(
     )
 
     simple_implicit_tau_leaping_loop!(
-        prob, alg, u_current, u_new, t_current, t_end, p, rng,
+        prob, alg, u_current, u_new, t_current, t_end, p, _rng,
         rate, nu, hor, max_hor, max_stoich, numjumps, epsilon,
         dtmin, saveat_times, usave, tsave, du, counts, rate_cache, rate_current, maj,
         save_end
@@ -1024,7 +1031,7 @@ end
 
 function DiffEqBase.solve(
         jump_prob::JumpProblem, alg::SimpleAdaptiveTauLeaping;
-        seed = nothing,
+        seed = nothing, rng = nothing,
         dtmin = nothing,
         saveat = nothing, save_start = nothing, save_end = nothing
     )
@@ -1032,18 +1039,18 @@ function DiffEqBase.solve(
         error("SimpleAdaptiveTauLeaping can only be used with PureLeaping JumpProblem with a MassActionJump.")
 
     prob = jump_prob.prob
-    rng = jump_prob.rng
+    _rng = resolve_rng(rng, seed)
     tspan = prob.tspan
 
     if dtmin === nothing
         dtmin = 1.0e-10 * one(typeof(tspan[2]))
     end
 
-    (seed !== nothing) && seed!(rng, seed)
-
     maj = jump_prob.massaction_jump
     numjumps = get_num_majumps(maj)
-    rate = massaction_rate(maj, numjumps)
+    maj_rates = Vector{typeof(tspan[2])}(undef, numjumps)
+    fill_scaled_rates!(maj_rates, maj, prob.p)
+    rate = massaction_rate(maj, maj_rates, numjumps)
     u0 = copy(prob.u0)
     p = prob.p
 
@@ -1083,7 +1090,7 @@ function DiffEqBase.solve(
     )
 
     simple_adaptive_tau_leaping_loop!(
-        prob, alg, u_current, u_new, t_current, t_end, p, rng,
+        prob, alg, u_current, u_new, t_current, t_end, p, _rng,
         rate, nu, hor, max_hor, max_stoich, numjumps, numspecies, alg.epsilon,
         dtmin, saveat_times, usave, tsave, du, counts, rate_cache, rate_effective,
         rate_current, maj, alg.implicit_alg, alg.eigenvalue_check,
@@ -1113,6 +1120,15 @@ Ensemble algorithm marker for GPU execution of tau-leaping ensemble simulations.
 
   - `backend`: Backend object used by the GPU extension.
   - `cpu_offload`: Fraction of trajectories to offload to CPU execution.
+
+## Random number generation
+
+Kernel ensembles use backend-local RNGs and reject explicit host `rng` and
+`rng_func` keywords.
+The `seed` solve keyword is supported with the KernelAbstractions CPU backend;
+other backends require their own seeding API and reject `seed`. With
+`trajectories = 1`, execution uses the serial CPU solver, which accepts its
+usual `rng`, `seed`, and ensemble `rng_func` keywords.
 
 ## Returns
 

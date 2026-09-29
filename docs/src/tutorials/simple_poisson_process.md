@@ -27,6 +27,7 @@ installed via
 using Pkg
 Pkg.add("JumpProcesses")
 Pkg.add("Plots")
+Pkg.add("SciMLBase")
 ```
 
 Let's also load our packages and set some defaults for our plot formatting
@@ -371,28 +372,24 @@ with ``N(t)`` a Poisson counting process with constant transition rate
 ``\lambda``, and the ``C_i`` independent and identical samples from a uniform
 distribution over ``\{-1,1\}``. We can simulate such a process as follows.
 
-We first ensure that we use the same random number generator as JumpProcesses.
-Custom RNGs can be passed to `solve` or `init` via the `rng` keyword argument.
-If no RNG is specified, JumpProcesses uses `Random.default_rng()`, which is also
-available as `JumpProcesses.DEFAULT_RNG`. Let's use the default
-
-```@example tut1
-rng = JumpProcesses.DEFAULT_RNG
-```
+The affect function can use `SciMLBase.get_rng(integrator)` to draw from the
+same random number generator as the jump solver. Custom RNGs can be passed to
+`solve` or `init` via the `rng` keyword argument.
 
 Let's assume `u[1]` is ``N(t)`` and `u[2]` is ``G(t)``. We now proceed as in the
 previous examples
 
 ```@example tut1
+using SciMLBase
+
 rate3(u, p, t) = p.λ
 
-# define the affect function via a closure
-affect3! = integrator -> let rng = rng
+function affect3!(integrator)
     # N(t) <-- N(t) + 1
     integrator.u[1] += 1
 
     # G(t) <-- G(t) + C_{N(t)}
-    integrator.u[2] += rand(rng, (-1, 1))
+    integrator.u[2] += rand(SciMLBase.get_rng(integrator), (-1, 1))
     nothing
 end
 crj = ConstantRateJump(rate3, affect3!)

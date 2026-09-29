@@ -137,11 +137,6 @@ function generate_jumps!(p::RSSAJumpAggregation, integrator, u, params, t)
     nothing
 end
 
-# alt erlang sampling above
-#rerl = one(sum_rate)
-#rerl *= rand(p.rng)
-#p.next_jump_time = t + (-one(sum_rate) / sum_rate) * log(rerl)
-
 ######################## SSA specific helper routines #########################
 
 """

@@ -319,6 +319,12 @@ function JumpProblem(prob, aggregator::PureLeaping, jumps::JumpSet;
     if haskey(kwargs, :rng)
         throw(ArgumentError("`rng` is no longer a keyword argument for `JumpProblem`. Pass `rng` to `solve` or `init` instead, e.g. `solve(jprob, SSAStepper(); rng = my_rng)`."))
     end
+    if haskey(kwargs, :scale_rates)
+        throw(ArgumentError("`scale_rates` is no longer a keyword argument for `JumpProblem`. Set `scale_rates` on the `MassActionJump` directly instead."))
+    end
+    if haskey(kwargs, :useiszero)
+        throw(ArgumentError("`useiszero` is no longer a keyword argument for `JumpProblem`. Set `useiszero` on the `MassActionJump` directly instead."))
+    end
 
     # Validate no spatial systems (not currently supported)
     (spatial_system !== nothing || hopping_constants !== nothing) &&

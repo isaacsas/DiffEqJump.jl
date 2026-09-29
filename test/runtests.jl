@@ -24,6 +24,7 @@ end
         @time @safetestset "Split Coupled Tests" begin include("splitcoupled.jl") end
         @time @safetestset "SSA Tests" begin include("ssa_tests.jl") end
         @time @safetestset "SSA Aggregator Smoke Tests" begin include("ssa_aggregator_smoke.jl") end
+        @time @safetestset "SortingDirect retained search order" begin include("sortingdirect_reuse.jl") end
         @time @safetestset "Tau Leaping Tests" begin include("regular_jumps.jl") end
         @time @safetestset "Simple SSA Callback Test" begin include("ssa_callback_test.jl") end
         @time @safetestset "SIR Discrete Callback Test" begin include("sir_model.jl") end
@@ -34,6 +35,7 @@ end
         @time @safetestset "Mass Action Jump Tests; Special Cases" begin include("degenerate_rx_cases.jl") end
         @time @safetestset "Mass Action Jump Tests; Floating Point Inputs" begin include("fp_unknowns.jl") end
         @time @safetestset "scale_rates Field Tests" begin include("scale_rates_field_test.jl") end
+        @time @safetestset "Mass-action working state" begin include("massaction_state.jl") end
         @time @safetestset "Direct allocations test" begin include("allocations.jl") end
         @time @safetestset "Bracketing Tests" begin include("bracketing.jl") end
         @time @safetestset "Composition-Rejection Table Tests" begin include("table_test.jl") end

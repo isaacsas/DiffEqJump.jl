@@ -12,8 +12,8 @@ function check_ssa_smoke_solution(sol, prob)
 end
 
 function check_ssa_smoke_problem(jprob)
-    # Independent trials start with identical mutable aggregator state. In
-    # particular, SortingDirect retains its learned search order between solves.
+    # Independent trials start with identical mutable aggregator state. SortingDirect
+    # intentionally retains its learned search order; see sortingdirect_reuse.jl.
     sol_default = solve(deepcopy(jprob), SSAStepper())
     check_ssa_smoke_solution(sol_default, jprob.prob)
 

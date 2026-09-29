@@ -161,14 +161,14 @@ function nonmonotonic_jump_prob(alg)
     jump = ConstantRateJump(nonmonotonic_rate, nonmonotonic_affect!;
         bounds = nonmonotonic_bounds)
     prob = DiscreteProblem(u0, (0.0, tf))
-    JumpProblem(prob, alg, jump; save_positions = (false, false), rng, vartojumps_map,
+    JumpProblem(prob, alg, jump; save_positions = (false, false), vartojumps_map,
         jumptovars_map)
 end
 
 function runSSAs(jump_prob)
     Asamp = zeros(Int, Nsims)
     for i in 1:Nsims
-        Asamp[i] = solve(jump_prob, SSAStepper())[1, end]
+        Asamp[i] = solve(jump_prob, SSAStepper(); rng)[1, end]
     end
     mean(Asamp)
 end

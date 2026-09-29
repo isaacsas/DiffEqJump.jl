@@ -153,8 +153,8 @@ sol = solve(jprob, SSAStepper(); seed = 1234)
 
 ### Resolution priority
 
-For SSAStepper, OrdinaryDiffEq ODE/DAE solvers, SimpleTauLeaping, and
-SimpleExplicitTauLeaping, an explicit `rng` takes priority over `seed`:
+For SSAStepper, OrdinaryDiffEq ODE/DAE solvers, and all five CPU tau-leaping
+algorithms, an explicit `rng` takes priority over `seed`:
 
 | User provides | Result |
 |---|---|
@@ -178,6 +178,7 @@ seed override, whereas SSAStepper and the ODE/DAE pathway use `Xoshiro(0)`.
 | OrdinaryDiffEq ODE/DAE solvers (e.g., `Tsit5`, `DFBDF`) | `Random.default_rng()` | Full support via `solve`/`init` kwargs |
 | StochasticDiffEq SDE/RODE solvers (e.g., `SRIW1`, `RandomEM`) | `Xoshiro` from the stored problem seed, or a random seed | Full support; `TaskLocalRNG` follows the seed policy above and is converted to `Xoshiro` |
 | `SimpleTauLeaping` | `Random.default_rng()` | Full support via `solve` kwargs |
+| `SimpleExplicitTauLeaping`, `SimpleImplicitTauLeaping`, `SimpleTrapezoidalLeaping`, `SimpleAdaptiveTauLeaping` | `Random.default_rng()` | Full support via `solve` kwargs |
 
 !!! note
     For reproducible simulations, always pass an explicit `rng` or `seed`.
@@ -201,7 +202,7 @@ backends.
 | OrdinaryDiffEq ODE/DAE (e.g., `Tsit5`, `DFBDF`) | JumpProcesses (`solve.jl`) | JumpProcesses' OrdinaryDiffEqCore extension → OrdinaryDiffEq | Yes |
 | StochasticDiffEq SDE/RODE (e.g., `SRIW1`, `RandomEM`) | StochasticDiffEqCore | StochasticDiffEqCore's JumpProblem initializer | No |
 | StochasticDiffEq jump algorithms (e.g., `TauLeaping`) | StochasticDiffEqCore | StochasticDiffEqCore's specialized jump-algorithm initializer | No |
-| `SimpleTauLeaping` | JumpProcesses (`simple_regular_solve.jl`, custom `DiffEqBase.solve`) | N/A | No |
+| All five CPU tau-leaping algorithms | JumpProcesses (`simple_regular_solve.jl`, custom `DiffEqBase.solve`) | N/A | No |
 
 For **SSAStepper**, `rng` is resolved via `resolve_rng` in `SSA_stepper.jl`'s
 `__init` and stored on the [`SSAIntegrator`](@ref).

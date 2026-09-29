@@ -634,9 +634,9 @@ let
     u0 = [150.0]
     tspan = (0.0, 10.0)
     sde_prob = SDEProblem(f!, g!, u0, tspan, p; noise_rate_prototype = zeros(1, 2))
-    jprob = JumpProblem(sde_prob, Direct(), birth, death; vr_aggregator = VR_FRM(), rng)
+    jprob = JumpProblem(sde_prob, Direct(), birth, death; vr_aggregator = VR_FRM())
 
-    sol = solve(jprob, LambaEM(); callback = switch_cb, adaptive = true)
+    sol = solve(jprob, LambaEM(); rng, callback = switch_cb, adaptive = true)
     @test SciMLBase.successful_retcode(sol)
     @test sol.t[end] == tspan[2]
     # The bug drove `jump_u` past ±1e15 within a few steps; with the fix it

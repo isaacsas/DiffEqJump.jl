@@ -462,7 +462,12 @@ function should_continue_solve(integrator::SSAIntegrator)
     integrator.keep_stepping && (has_jump || has_tstop)
 end
 
-function reset_aggregated_jumps!(integrator::SSAIntegrator, uprev = nothing)
+function reset_aggregated_jumps!(integrator::SSAIntegrator, uprev = nothing; kwargs...)
+    if haskey(kwargs, :update_jump_params)
+        throw(ArgumentError("`update_jump_params` keyword argument has been removed. " *
+                            "Rate updates are now handled automatically by `initialize!` " *
+                            "via `fill_scaled_rates!`."))
+    end
     reset_aggregated_jumps!(integrator, uprev, integrator.cb)
     nothing
 end

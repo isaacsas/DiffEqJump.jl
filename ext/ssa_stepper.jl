@@ -54,12 +54,17 @@ function flatten_stoich(stoch, ::Type{IT}) where {IT <: Integer}
     species, coeffs, offsets
 end
 
-function GPUMassActionJump(maj::JumpProcesses.MassActionJump, backend,
+function GPUMassActionJump(maj::JumpProcesses.MassActionJump, params, backend,
         ::Type{TT}) where {TT <: AbstractFloat}
     rs_species, rs_coeffs, rs_offsets = flatten_stoich(maj.reactant_stoch, Int32)
     ns_species, ns_coeffs, ns_offsets = flatten_stoich(maj.net_stoch, Int32)
 
-    GPUMassActionJump(adapt(backend, convert(Vector{TT}, maj.scaled_rates)),
+    # The host definition can be parameter-mapped, with scaled_rates === nothing.
+    # Materialize fresh numeric working rates before adapting them to the device.
+    rates = Vector{TT}(undef, JumpProcesses.get_num_majumps(maj))
+    JumpProcesses.fill_scaled_rates!(rates, maj, params)
+
+    GPUMassActionJump(adapt(backend, rates),
         adapt(backend, rs_species),
         adapt(backend, rs_coeffs),
         adapt(backend, rs_offsets),
@@ -263,10 +268,12 @@ grid points, as if the problem had been built with
 `save_positions = (false, false)`; the aggregator chosen in the `JumpProblem` is
 also ignored, since the kernel always runs the Direct method.
 
-Randomness comes from the backend's own device RNG rather than the `rng` stored
-in the `JumpProblem`. `seed` is applied to the ambient generator, so it makes a
-run reproducible on backends that draw from it, such as `CPU()`; seeding a GPU
-backend is done through that backend's own `seed!`.
+For multiple trajectories, randomness comes from the backend's own RNG. `seed`
+is supported with `CPU()` and seeds Julia's task-local generator; device backends
+must be seeded through their own API before calling `solve` (for example,
+`CUDA.seed!`). Passing a host `rng` or `rng_func`, or `seed` with a device backend,
+is rejected.
+A single trajectory uses `EnsembleSerial()` and its usual solve-level RNG inputs.
 
 The reaction data is uploaded to the device once and shared by every thread, so
 all trajectories solve the same problem and a `prob_func` is not supported.
@@ -276,6 +283,7 @@ function SciMLBase.__solve(ensembleprob::SciMLBase.AbstractEnsembleProblem,
         ensemblealg::EnsembleGPUKernel;
         trajectories,
         seed = nothing,
+        rng = nothing,
         saveat = nothing,
         save_start = true,
         save_end = true,
@@ -283,16 +291,15 @@ function SciMLBase.__solve(ensembleprob::SciMLBase.AbstractEnsembleProblem,
         kwargs...)
     if trajectories == 1
         return SciMLBase.__solve(ensembleprob, alg, EnsembleSerial(); trajectories = 1,
-            seed, saveat, save_start, save_end, callback, kwargs...)
+            seed, rng, saveat, save_start, save_end, callback, kwargs...)
     end
 
     callback === nothing ||
         error("EnsembleGPUKernel with SSAStepper does not support callbacks, since they \
                would have to run inside the GPU kernel.")
 
-    seed !== nothing && Random.seed!(seed)
-
     ensemblealg.backend === nothing ? backend = CPU() : backend = ensemblealg.backend
+    seed_kernel_backend!(backend, seed, rng, kwargs)
 
     jump_prob = ensembleprob.prob
     jump_prob isa JumpProblem ||
@@ -340,7 +347,7 @@ function SciMLBase.__solve(ensembleprob::SciMLBase.AbstractEnsembleProblem,
     # lives in registers rather than being uploaded once per thread.
     u0 = SVector{state_dim, ET}(prob.u0)
     saveat_gpu = adapt(backend, save_times)
-    maj_gpu = GPUMassActionJump(maj, backend, TT)
+    maj_gpu = GPUMassActionJump(maj, prob.p, backend, TT)
 
     us = allocate(backend, ET, (trajectories, state_dim, nsave))
 

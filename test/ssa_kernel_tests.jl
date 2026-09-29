@@ -1,6 +1,7 @@
 using JumpProcesses
 using Test, Statistics
 using KernelAbstractions, Adapt
+include("kernel_contract_tests.jl")
 
 # Body of the SSA kernel tests, run against both a GPU backend and the
 # KernelAbstractions CPU backend so the same behaviour is covered without a GPU.
@@ -197,5 +198,9 @@ function run_ssa_kernel_tests(backend, nsims)
         @test_throws ErrorException solve(varying, SSAStepper(),
             EnsembleGPUKernel(backend); trajectories = 5, saveat = 1.0)
     end
+    run_kernel_massaction_rate_tests(backend, SSAStepper(), Direct())
+    rng_prob = majump_prob([5.0], [Pair{Int, Int}[]], [[1 => 1]], [0], (0.0, 4.0))
+    run_kernel_rng_tests(backend, SSAStepper(), rng_prob; saveat = 1.0)
+    run_regular_kernel_rng_tests(backend)
     return nothing
 end
