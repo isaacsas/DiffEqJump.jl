@@ -440,10 +440,16 @@ function configure_jump_problem(prob, ::VR_DirectFW, jumps, cvrjs)
     return new_prob, variable_jump_callback
 end
 
-# recursively evaluate the cumulative sum of the rates for type stability
-@inline function cumsum_rates!(cum_rate_sum, u, p, t, rates::Tuple)
-    cur_sum = zero(eltype(cum_rate_sum))
-    cumsum_rates!(cum_rate_sum, u, p, t, 1, cur_sum, rates...)
+# Unrolled at compile time: recursive splatting over `rates...` is only inferred for
+# tuples of up to 32 elements, beyond which every rate evaluation is dynamically dispatched.
+@generated function cumsum_rates!(cum_rate_sum, u, p, t, rates::Tuple)
+    body = Expr(:block, :(cur_sum = zero(eltype(cum_rate_sum))))
+    for i in 1:fieldcount(rates)
+        push!(body.args, :(cur_sum += rates[$i](u, p, t)))
+        push!(body.args, :(@inbounds cum_rate_sum[$i] = cur_sum))
+    end
+    push!(body.args, :(return cur_sum))
+    return body
 end
 
 # loop-based version for Vector rate_funcs (avoids dynamic splatting)
@@ -454,17 +460,6 @@ end
         cum_rate_sum[idx] = cur_sum
     end
     return cur_sum
-end
-
-@inline function cumsum_rates!(cum_rate_sum, u, p, t, idx, cur_sum, rate, rates...)
-    new_sum = cur_sum + rate(u, p, t)
-    @inbounds cum_rate_sum[idx] = new_sum
-    idx += 1
-    cumsum_rates!(cum_rate_sum, u, p, t, idx, new_sum, rates...)
-end
-
-@inline function cumsum_rates!(cum_rate_sum, u, p, t, idx, cur_sum, rate)
-    @inbounds cum_rate_sum[idx] = cur_sum + rate(u, p, t)
 end
 
 function total_variable_rate(
