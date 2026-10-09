@@ -26,21 +26,21 @@ end
 @testset "SortingDirect preserves learned search order" begin
     @testset "$representation" for representation in (:parameterized_massaction, :fixed_massaction, :constant)
         jprob = sortingdirect_reuse_problem(representation)
-        sol = solve(jprob, SSAStepper(); seed = 12345, alias_jump = true)
+        sol = solve(jprob, SSAStepper(); seed = 12345)
         @test SciMLBase.successful_retcode(sol)
         @test sum(last(sol.u)) > 0
 
         # Seeded replay requires identical initial search order, as well as RNG
         # state. Each copy begins with the order learned by the completed solve.
-        replay = solve(deepcopy(jprob), SSAStepper(); seed = 12345, alias_jump = true)
-        repeated = solve(deepcopy(jprob), SSAStepper(); seed = 12345, alias_jump = true)
+        replay = solve(deepcopy(jprob), SSAStepper(); seed = 12345)
+        repeated = solve(deepcopy(jprob), SSAStepper(); seed = 12345)
         @test replay.t == repeated.t
         @test replay.u == repeated.u
 
         # Initialization and rate resets retain the ordering optimization.
         aggregation = jprob.discrete_jump_aggregation
         aggregation.jump_search_order .= [3, 1, 2]
-        integrator = init(jprob, SSAStepper(); seed = 12345, alias_jump = true)
+        integrator = init(jprob, SSAStepper(); seed = 12345)
         @test aggregation.jump_search_order == [3, 1, 2]
         if representation !== :fixed_massaction
             integrator.p .= [3.0, 4.0, 5.0]

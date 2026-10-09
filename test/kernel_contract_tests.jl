@@ -56,6 +56,50 @@ function run_kernel_rng_tests(backend, alg, jump_prob; kwargs...)
     end
 end
 
+function run_kernel_alias_tests(backend, alg, jump_prob; kwargs...)
+    ensemble_prob = EnsembleProblem(jump_prob)
+    paths(sol) = [(traj.t, traj.u) for traj in sol.u]
+
+    @testset "Kernel alias inputs: $(typeof(alg))" begin
+        # Kernels always build device-owned state, so the removed `alias_jump`
+        # keyword and `alias` choices are rejected rather than silently ignored.
+        # These paths bypass SciMLBase's keyword validation, so the never-supported
+        # plural `alias_jumps` is rejected explicitly as well.
+        for options in ((; alias_jump = true), (; alias_jump = false),
+            (; alias_jump = nothing), (; alias_jumps = false), (; alias = true),
+            (; alias = false), (; alias = SciMLBase.ODEAliasSpecifier(alias_u0 = true)))
+            @test_throws ArgumentError solve(ensemble_prob, alg,
+                EnsembleGPUKernel(backend); trajectories = 16, kwargs..., options...)
+        end
+        @test_throws "`alias_jump` keyword argument was removed" solve(ensemble_prob,
+            alg, EnsembleGPUKernel(backend); trajectories = 16, kwargs...,
+            alias_jump = true)
+
+        if backend isa CPU
+            sol = solve(ensemble_prob, alg, EnsembleGPUKernel(backend);
+                trajectories = 16, kwargs..., alias = nothing)
+            @test all(SciMLBase.successful_retcode, sol.u)
+        end
+
+        # A single trajectory delegates to the serial solver, whose rules apply:
+        # SSAStepper raises the migration error and supports `alias`, while the
+        # tau-leaping solvers' strict keyword signatures reject both keywords.
+        single(; options...) = solve(ensemble_prob, alg, EnsembleGPUKernel(backend);
+            trajectories = 1, seed = 123, kwargs..., options...)
+        if alg isa SSAStepper
+            @test_throws ArgumentError single(; alias_jump = true)
+            # `alias = false` keeps the problem's `u0` unmodified between the solves.
+            kernel = single(; alias = false)
+            serial = solve(ensemble_prob, alg, EnsembleSerial(); trajectories = 1,
+                seed = 123, kwargs..., alias = false)
+            @test paths(kernel) == paths(serial)
+        else
+            @test_throws MethodError single(; alias_jump = true)
+            @test_throws MethodError single(; alias = true)
+        end
+    end
+end
+
 function run_kernel_massaction_rate_tests(backend, alg, aggregator)
     ext = Base.get_extension(JumpProcesses, :JumpProcessesKernelAbstractionsExt)
 
@@ -124,4 +168,5 @@ function run_regular_kernel_rng_tests(backend)
     rj = RegularJump(birth_rate!, birth_c!, 1)
     jp = JumpProblem(DiscreteProblem([0.0], (0.0, 2.0), (20.0,)), PureLeaping(), rj)
     run_kernel_rng_tests(backend, SimpleTauLeaping(), jp; dt = 0.25)
+    run_kernel_alias_tests(backend, SimpleTauLeaping(), jp; dt = 0.25)
 end

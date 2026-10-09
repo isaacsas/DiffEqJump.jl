@@ -62,6 +62,9 @@ algorithms are optimized for pure jump problems.
     [`SSAStepper`](@ref) generated-solution uses piecewise constant
     interpolation, and can therefore exactly evaluate the sampled solution
     path at any time when only saving the post-jump state for each jump.
+    `SSAStepper` supports the common `alias` keyword argument for `u0`, `p`,
+    and `tstops`, and reuses the problem's jump state rather than copying it;
+    see [Jump state ownership and problem reuse](@ref jump_state_ownership).
 
 ## RegularJump Compatible Methods
 

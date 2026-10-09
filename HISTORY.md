@@ -36,12 +36,41 @@ changes are not intended for a 9.x release.
     `Xoshiro`. `TaskLocalRNG` is converted to `Xoshiro`; `seed = 0` means no seed
     override on this pathway, whereas the JumpProcesses RNG resolver uses
     `Xoshiro(0)`.
-  - **Breaking**: The singular `alias_jump` keyword is no longer consumed on
-    the StochasticDiffEq `init` pathway. For SDE jump-state copying, pass
-    `alias = SciMLBase.SDEAliasSpecifier(; alias_jumps = false)` to `solve` or
-    `init`; use `alias_jumps = true` in the specifier to reuse jump state. RODE
-    problems use `SciMLBase.RODEAliasSpecifier`. Other JumpProcesses-owned
-    pathways retain their existing `alias_jump` behavior.
+  - **Breaking**: Solvers owned by JumpProcesses (`SSAStepper` and the
+    OrdinaryDiffEq ODE/DAE pathways) no longer copy a `JumpProblem`'s jump state.
+    On every thread they reuse the problem's aggregator and jump callbacks,
+    re-initializing them at each `init`; previously, solves on threads other than
+    thread 1 copied this state. A `JumpProblem` therefore supports one active solve
+    or integrator at a time. Concurrent solves from threads or tasks, and
+    integrators alive at the same time, must each use an independent copy, such as
+    `deepcopy(jprob)`. Problems created with `remake` share the original's jump
+    state, so they are not independent either. `EnsembleProblem` provides the
+    needed copies: `EnsembleThreads` copies the problem once per spawned task, and
+    `safetycopy = true` copies it for every trajectory. See the new tutorial on
+    ensembles and problem reuse for patterns that balance performance and safety.
+  - **Breaking**: The `alias_jump` keyword argument has been removed. Passing it to
+    `solve`, `init`, `JumpProblem`, or a multi-trajectory `EnsembleGPUKernel`
+    solve raises an error; remove it, and solve a copy of the problem when
+    independent jump state is needed. StochasticDiffEq SDE/RODE solvers ignore the
+    keyword and keep their own policy: pass
+    `alias = SciMLBase.SDEAliasSpecifier(; alias_jumps = false)` (or
+    `SciMLBase.RODEAliasSpecifier` for RODEs) to copy jump state, or
+    `alias_jumps = true` to reuse it. When unspecified, those solvers reuse jump
+    state on thread 1 and copy it on other threads.
+  - `SSAStepper` now supports the common `alias` keyword argument for its `u0`, `p`,
+    and `tstops` inputs, given as a `Bool`, a `SciMLBase.DiscreteAliasSpecifier`, or
+    an `ODEAliasSpecifier` (which also controls `tstops`). The defaults match
+    OrdinaryDiffEq: `u0` is copied, `p` is reused, and a caller's `tstops` array is
+    never modified. `alias` never controls jump state.
+  - `SSAStepper` now saves states, and evaluates `integrator(t)`, with
+    `recursivecopy` as OrdinaryDiffEq does, so nested state types are saved as
+    independent snapshots. `tstops` given as a number, a tuple, or an
+    `AbstractVector` other than a `Vector` of the time type (such as a range or
+    view) is copied into a `Vector` at `init`, so `add_tstop!` works with it.
+  - **Breaking**: Multi-trajectory `EnsembleGPUKernel` solves reject `alias` values
+    other than `nothing`, and the `alias_jumps` keyword, since kernels always build
+    device-owned state.
+  - The minimum supported SciMLBase version is now 3.34.
   - `SSAIntegrator` now supports the `SciMLBase` RNG interface (`has_rng`,
     `get_rng`, `set_rng!`).
   - **Breaking**: Passing `seed` to a multi-trajectory `EnsembleGPUKernel`

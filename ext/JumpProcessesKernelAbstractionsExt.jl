@@ -25,6 +25,21 @@ function seed_kernel_backend!(backend, seed, rng, kwargs)
     return nothing
 end
 
+# Kernels always build device-owned state, so the removed `alias_jump` keyword and
+# `alias` controls are rejected rather than silently ignored. These paths bypass
+# SciMLBase's keyword validation, so the never-supported plural spelling is rejected here.
+function reject_kernel_alias_kwargs(kwargs)
+    haskey(kwargs, :alias_jump) &&
+        throw(ArgumentError(JumpProcesses.ALIAS_JUMP_REMOVED_MSG))
+    haskey(kwargs, :alias_jumps) && throw(ArgumentError(
+        "`alias_jumps` is not a keyword argument; it is a field of some alias " *
+        "specifiers. EnsembleGPUKernel always builds device-owned jump state."))
+    get(kwargs, :alias, nothing) === nothing || throw(ArgumentError(
+        "EnsembleGPUKernel does not support the `alias` keyword with multiple " *
+        "trajectories, since kernels always build device-owned state."))
+    return nothing
+end
+
 include("ssa_stepper.jl")
 include("explicit_tau_leaping.jl")
 
@@ -43,6 +58,7 @@ function SciMLBase.__solve(ensembleprob::SciMLBase.AbstractEnsembleProblem,
 
     ensemblealg.backend === nothing ? backend = CPU() :
     backend = ensemblealg.backend
+    reject_kernel_alias_kwargs(kwargs)
     seed_kernel_backend!(backend, seed, rng, kwargs)
 
     jump_prob = ensembleprob.prob

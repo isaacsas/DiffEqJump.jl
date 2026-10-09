@@ -46,6 +46,7 @@ end
         @time @safetestset "Save_positions test" begin include("save_positions.jl") end
         @time @safetestset "RNG kwarg tests" begin include("rng_kwarg_tests.jl") end
         @time @safetestset "Stochastic dispatch tests" begin include("stochastic_dispatch.jl") end
+        @time @safetestset "Jump-state ownership and alias controls" begin include("jump_state_ownership.jl") end
         @time @safetestset "Ensemble Uniqueness test" begin include("ensemble_uniqueness.jl") end
         @time @safetestset "Ensemble Problem Tests" begin include("ensemble_problems.jl") end
         @time @safetestset "A + B <--> C" begin include("reversible_binding.jl") end
@@ -67,6 +68,7 @@ end
 
     if GROUP == "All" || GROUP == "ThreadSafety"
         @time @safetestset "Thread Safety test (threaded)" begin include("thread_safety.jl") end
+        @time @safetestset "Jump-state ownership (threaded)" begin include("jump_state_ownership.jl") end
     end
 
     if GROUP == "CUDA"

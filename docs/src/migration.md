@@ -137,26 +137,58 @@ the `SSAStepper`, `SimpleTauLeaping`, and `SimpleExplicitTauLeaping` kernels.
 With `trajectories = 1`, execution uses the serial CPU fallback and its usual
 RNG/seed controls.
 
-## Copying and concurrent solves
+## Jump state ownership, `alias_jump`, and concurrent solves
+
+JumpProcesses 10 never copies a `JumpProblem`'s jump state in the solvers it owns
+(`SSAStepper` and the OrdinaryDiffEq ODE/DAE pathways). Every solve and `init`
+reuses the problem's jump aggregator and callbacks, re-initializing them from the
+current state and parameters. Previously, solves on threads other than thread 1
+copied this state.
+
+This makes repeated serial solves cheap, but one `JumpProblem` now supports only
+one active solve or integrator at a time. Code that solves one shared problem from
+several threads or tasks must give each task its own copy:
+
+```julia
+# Before: relied on copies made off thread 1 (no longer made)
+Threads.@threads for i in 1:n
+    sols[i] = solve(jprob, SSAStepper())
+end
+
+# After: copy once per task and reuse the copy within the task
+chunks = Iterators.partition(1:n, cld(n, Threads.nthreads()))
+tasks = map(chunks) do idxs
+    Threads.@spawn begin
+        local_prob = deepcopy(jprob)
+        [solve(local_prob, SSAStepper()) for _ in idxs]
+    end
+end
+sols = reduce(vcat, fetch.(tasks))
+```
+
+An `EnsembleProblem` already provides this isolation: `EnsembleThreads` with
+`safetycopy = false` copies the problem once per spawned task, and
+`safetycopy = true` copies it before every trajectory. Problems created with
+`remake` share the original's jump state, so they are not independent copies;
+use `deepcopy` instead. The same applies to integrators from `init` that are
+alive at the same time. See the
+[ensembles and problem reuse tutorial](@ref ensembles_problem_reuse) for details.
+
+The `alias_jump` keyword argument has been removed, and passing it raises an
+error. Delete it from `solve` and `init` calls; `alias_jump = true` is now the
+behavior everywhere, and `alias_jump = false` is replaced by solving a copy of
+the problem. StochasticDiffEq SDE/RODE solvers keep their own policy, controlled
+by `alias = SciMLBase.SDEAliasSpecifier(; alias_jumps = false)` (or
+`SciMLBase.RODEAliasSpecifier`), and ignore `alias_jump`.
+
+`SSAStepper` now supports the common `alias` keyword argument for `u0`, `p`, and
+`tstops`; see [Jump state ownership and problem reuse](@ref jump_state_ownership).
+Its defaults match the previous behavior: `u0` is copied, `p` is reused, and a
+caller's `tstops` array is never modified.
 
 Integrator RNGs and separate working-rate buffers do not make a shared
-`JumpProblem` safe for concurrent solves: callbacks and aggregators remain
-mutable. Use independent problem copies for manually launched tasks. With
-`EnsembleProblem`, `safetycopy = true` requests a separate problem copy per
-trajectory. If using `safetycopy = false`, ensure your `prob_func` and solver
-settings preserve the required isolation; do not assume arbitrary shared
-mutable objects are safe.
-Do not return one shared mutable RNG from a custom ensemble `rng_func`.
-
-The existing `alias_jump` keyword remains available for JumpProcesses-owned
-SSAStepper and ODE/DAE initialization. Its default is `true` on thread 1 and
-`false` on other threads. The SDE/RODE backend instead uses
-`alias = SciMLBase.SDEAliasSpecifier(; alias_jumps = false)` or
-`SciMLBase.RODEAliasSpecifier(; alias_jumps = false)` to request copied jump
-state. The singular `alias_jump` keyword is no longer consumed on the SDE
-`init` path; use the backend specifier. `alias_jumps` is a field of that
-specifier, not a standalone keyword. A common JumpProcesses alias API is
-not introduced by this migration.
+`JumpProblem` safe for concurrent solves on their own. Do not return one shared
+mutable RNG from a custom ensemble `rng_func`.
 
 `SortingDirect` retains its learned search order across solves and resets.
 For identical seeded trajectories, start from identical learned state as well

@@ -48,6 +48,14 @@ The Sorting Direct method. Often the fastest algorithm for smaller to moderate
 sized systems (tens of jumps), or systems where a few jumps occur much more
 frequently than others.
 
+The search order learned during a solve is kept in the problem's jump state and is not
+reset by `init`, so repeated solves of the same problem (including problems created with
+`remake`) start from the order learned so far. This speeds up many consecutive
+simulations. Sampling remains exact, but a given seed reproduces a trajectory only from
+the same learned order: for exact replay, solve a `deepcopy` of a problem that has never
+been solved. Ensemble results additionally depend on the seeds, batching, thread count,
+and ensemble algorithm.
+
 J. M. McCollum, G. D. Peterson, C. D. Cox, M. L. Simpson and N. F. Samatova, The
 sorting direct method for stochastic simulation of biochemical systems with
 varying reaction execution behavior, Computational Biology and Chemistry, 30

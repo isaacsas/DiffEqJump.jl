@@ -206,6 +206,7 @@ function run_ssa_kernel_tests(backend, nsims)
     run_kernel_massaction_rate_tests(backend, SSAStepper(), Direct())
     rng_prob = majump_prob([5.0], [Pair{Int, Int}[]], [[1 => 1]], [0], (0.0, 4.0))
     run_kernel_rng_tests(backend, SSAStepper(), rng_prob; saveat = 1.0)
+    run_kernel_alias_tests(backend, SSAStepper(), rng_prob; saveat = 1.0)
     run_regular_kernel_rng_tests(backend)
     return nothing
 end

@@ -71,17 +71,36 @@ page](https://docs.sciml.ai/JumpProcesses/stable/tutorials/discrete_stochastic_e
 the DifferentialEquations.jl [docs](https://docs.sciml.ai/JumpProcesses/stable/) for usage
 examples and commonly asked questions.
 
-!!! warning "Thread Safety"
+!!! warning "Thread safety and problem reuse"
 
-    `JumpProblem` contains mutable state (aggregator data, callbacks) and is **not
-    thread-safe**. A single `JumpProblem` instance must not be solved concurrently from
-    multiple threads or tasks without first creating independent copies via `deepcopy`.
-    With `EnsembleProblem`, `safetycopy = true` requests a separate problem copy
-    per trajectory. If using `safetycopy = false`, the caller's
-    `prob_func` and solver settings must provide the required isolation. CPU ensemble
-    methods can assign separate RNGs to trajectories; a custom `rng_func` must not
-    return one shared mutable RNG. Separate RNGs alone do not isolate mutable jump
-    state, and kernel ensembles have their own backend RNG rules.
+    A `JumpProblem` stores mutable jump state: the jump aggregator and its callbacks.
+    Solvers owned by JumpProcesses, [`SSAStepper`](@ref) and the OrdinaryDiffEq ODE/DAE
+    pathways, reuse this state directly and re-initialize it at every `init`; they never
+    copy it. A `JumpProblem` is therefore **not thread-safe** and supports only one active
+    solve or integrator at a time:
+
+      - Repeated serial solves of one problem are safe, and avoid copying.
+      - Concurrent solves from multiple threads or tasks, and integrators that are alive at
+        the same time, each need an independent copy, such as `deepcopy(jprob)`.
+      - `remake(jprob; ...)` shares the original's jump state, so remade problems are not
+        independent for concurrent use.
+      - `EnsembleProblem` supplies isolation. `EnsembleSerial` reuses the problem
+        sequentially. `EnsembleThreads` with `safetycopy = false` copies the problem once
+        per spawned task. `safetycopy = true` copies it before every trajectory, before
+        `prob_func` is called. A `prob_func` that returns some other, shared problem
+        defeats these copies, and callbacks passed as `solve` keyword arguments are shared
+        by all trajectories.
+      - `EnsembleDistributed` with `pmap_batch_size > 1` and `safetycopy = false` can run
+        concurrent tasks on one worker's copy of the problem; use `safetycopy = true` or
+        `pmap_batch_size = 1`.
+      - StochasticDiffEq SDE/RODE solvers apply their own jump-state copying policy.
+
+    CPU ensemble methods can assign separate RNGs to trajectories; a custom `rng_func` must
+    not return one shared mutable RNG. Separate RNGs alone do not isolate mutable jump
+    state, and kernel ensembles have their own backend RNG rules. See the
+    [ensembles and problem reuse
+    tutorial](https://docs.sciml.ai/JumpProcesses/stable/tutorials/ensembles_and_problem_reuse/)
+    for patterns that balance performance and safety.
 """
 mutable struct JumpProblem{iip, P, A, C, J <: Union{Nothing, AbstractJumpAggregator}, J1,
     J2, J3, J4, K} <: SciMLBase.AbstractJumpProblem{P, J}
@@ -141,6 +160,19 @@ function remake_extended_u0(prob, newu0)
 end
 
 Base.@pure remaker_of(prob::T) where {T <: JumpProblem} = SciMLBase.parameterless_type(T)
+"""
+    remake(jprob::JumpProblem; u0 = missing, p = missing, tspan, prob)
+
+Construct a `JumpProblem` with a new initial condition `u0`, parameters `p`, time span
+`tspan`, or wrapped problem `prob`.
+
+The new problem shares the original's jump aggregator and jump callbacks rather than
+copying them. Solvers owned by JumpProcesses re-initialize this state from the problem being
+solved at every `init`, so the original and remade problems can be solved one after
+another. They must not be solved concurrently, or used for integrators that are alive at
+the same time; use `deepcopy` to obtain an independent problem. `SortingDirect`'s learned
+search order is also shared.
+"""
 function DiffEqBase.remake(jprob::JumpProblem; u0 = missing, p = missing,
         interpret_symbolicmap = true, use_defaults = false, kwargs...)
     T = remaker_of(jprob)
@@ -268,6 +300,7 @@ function JumpProblem(prob, aggregator::AbstractAggregatorAlgorithm, jumps::JumpS
     if haskey(kwargs, :useiszero)
         throw(ArgumentError("`useiszero` is no longer a keyword argument for `JumpProblem`. Set `useiszero` on the `MassActionJump` directly instead."))
     end
+    haskey(kwargs, :alias_jump) && throw(ArgumentError(ALIAS_JUMP_REMOVED_MSG))
 
     # keep the original MAJ (including {Nothing} parameterized MAJs);
     # fill_scaled_rates! in each aggregator's initialize! handles rate setup
@@ -347,6 +380,7 @@ function JumpProblem(prob, aggregator::PureLeaping, jumps::JumpSet;
     if haskey(kwargs, :useiszero)
         throw(ArgumentError("`useiszero` is no longer a keyword argument for `JumpProblem`. Set `useiszero` on the `MassActionJump` directly instead."))
     end
+    haskey(kwargs, :alias_jump) && throw(ArgumentError(ALIAS_JUMP_REMOVED_MSG))
 
     # Validate no spatial systems (not currently supported)
     (spatial_system !== nothing || hopping_constants !== nothing) &&

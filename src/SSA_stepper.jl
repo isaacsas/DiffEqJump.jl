@@ -16,6 +16,23 @@ Highly efficient integrator for pure jump problems that involve only `ConstantRa
   - Supports `rng` and `seed` keyword arguments in `solve`/`init` to control the random
     number generator used for jump sampling. `rng` accepts any `AbstractRNG`, while `seed`
     creates a `Xoshiro` generator. `rng` takes priority over `seed`.
+  - Reuses the `JumpProblem`'s jump state (aggregator and jump callback), re-initializing
+    it at every `init`; it is never copied. One `JumpProblem` therefore supports one active
+    solve or integrator at a time. For concurrent solves use independent copies, for
+    example `deepcopy(jprob)`, or an `EnsembleProblem`. See the `JumpProblem` docstring.
+  - Supports the common `alias` keyword argument for its `u0`, `p`, and `tstops` inputs,
+    following SciMLBase's alias-specifier convention: pass `nothing` (the default), a
+    `Bool` that applies to all three, a `SciMLBase.DiscreteAliasSpecifier` (`alias_u0`,
+    `alias_p`), or an `ODEAliasSpecifier` (which also has `alias_tstops`). `true` permits
+    aliasing and `false` requests a copy. The defaults copy `u0` (with `recursivecopy`),
+    reuse `p`, and never modify a caller's `tstops` array. With `alias_u0 = true` the
+    integrator mutates the problem's `u0`, so a later solve starts from its final state.
+    `alias_f` and `alias_du0` have no effect, and `alias` never controls jump state.
+  - `tstops` may be a number, a tuple, or an `AbstractVector` of times (such as a range or
+    view), or a callable `(p, tspan) -> times`. Only a `Vector` of the time type can be
+    aliased; other supported inputs are copied into a new `Vector` at `init`.
+  - Saved states are independent snapshots of the integrator state made with
+    `recursivecopy`, as in OrdinaryDiffEq.
   - As when using jumps with ODEs and SDEs, saving controls for whether to save each time a
     jump occurs are via the `save_positions` keyword argument to `JumpProblem`. Note that when
     choosing `SSAStepper` as the timestepper, `save_positions = (true,true)`, `(true,false)`,
@@ -167,8 +184,26 @@ function SciMLBase.set_rng!(integrator::SSAIntegrator, rng)
     nothing
 end
 
-(integrator::SSAIntegrator)(t) = copy(integrator.u)
-(integrator::SSAIntegrator)(out, t) = (out .= integrator.u)
+(integrator::SSAIntegrator)(t) = recursivecopy(integrator.u)
+# Copy the current state into `out` and return it. Nested arrays are copied recursively,
+# like saved states; other states, including scalars, are broadcast into `out`.
+function (integrator::SSAIntegrator)(out, t)
+    u = integrator.u
+    if u isa AbstractArray && eltype(u) <: AbstractArray
+        recursivecopy!(out, u)
+    else
+        out .= u
+    end
+    return out
+end
+
+# Save a snapshot of the current state, matching OrdinaryDiffEq's save semantics
+# (`copyat_or_push!` stores a `recursivecopy` of the live state).
+@inline function save_current_state!(integrator::SSAIntegrator, t)
+    push!(integrator.sol.t, t)
+    copyat_or_push!(integrator.sol.u, length(integrator.sol.u) + 1, integrator.u)
+    nothing
+end
 
 # SciMLBase v3 / DiffEqBase v7 renamed the integrator's `u_modified` field to
 # `derivative_discontinuity` and internal callback code now reads/writes the
@@ -224,15 +259,13 @@ function DiffEqBase.solve!(integrator::SSAIntegrator)
             # Split to help prediction
             while integrator.cur_saveat <= length(integrator.saveat) &&
                   integrator.saveat[integrator.cur_saveat] < integrator.t
-                push!(integrator.sol.t, integrator.saveat[integrator.cur_saveat])
-                push!(integrator.sol.u, copy(integrator.u))
+                save_current_state!(integrator, integrator.saveat[integrator.cur_saveat])
                 integrator.cur_saveat += 1
             end
         end
 
         if integrator.save_end && integrator.sol.t[end] != end_time
-            push!(integrator.sol.t, end_time)
-            push!(integrator.sol.u, copy(integrator.u))
+            save_current_state!(integrator, end_time)
         end
     end
 
@@ -273,20 +306,58 @@ function check_continuous_callback_error(callback)
     return nothing
 end
 
+# Normalize SSAStepper's `alias` keyword to `(alias_u0, alias_p, alias_tstops)`, each
+# `nothing` (solver default), `true` (aliasing permitted), or `false`. `alias_f` and
+# `alias_du0` have no effect: SSAStepper never evaluates `f` and has no `du0`.
+ssa_alias_choices(::Nothing) = (nothing, nothing, nothing)
+ssa_alias_choices(alias::Bool) = (alias, alias, alias)
+function ssa_alias_choices(alias::SciMLBase.DiscreteAliasSpecifier)
+    (alias.alias_u0, alias.alias_p, nothing)
+end
+function ssa_alias_choices(alias::SciMLBase.ODEAliasSpecifier)
+    (alias.alias_u0, alias.alias_p, alias.alias_tstops)
+end
+function ssa_alias_choices(alias)
+    throw(ArgumentError("SSAStepper's `alias` keyword accepts `nothing`, a `Bool`, a " *
+                        "`SciMLBase.DiscreteAliasSpecifier`, or a " *
+                        "`SciMLBase.ODEAliasSpecifier`, but received a $(typeof(alias)). " *
+                        "`alias` controls `u0`, `p`, and `tstops`; it never controls " *
+                        "jump state."))
+end
+
+# Returns `(tstops, alias_tstops, copied_tstops)` for the integrator. `alias_tstops`
+# means the integrator may insert into `tstops`, and `copied_tstops` means it already
+# owns them. Only a caller's `Vector` of the time type can be aliased; other containers
+# are materialized, as aliasing is permitted but not required.
+function ssa_init_tstops(tstops, ::Type{T}, alias_tstops) where {T}
+    if tstops isa Vector{T}
+        if alias_tstops === true
+            return tstops, true, false
+        elseif alias_tstops === false
+            return copy(tstops), true, true
+        else
+            # Default: never mutate the caller's array; copy before the first insertion.
+            return tstops, false, false
+        end
+    end
+    owned = (tstops isa Number) ? T[tstops] : collect(T, tstops)
+    return owned, true, true
+end
+
 function SciMLBase.__init(jump_prob::JumpProblem,
         alg::SSAStepper;
         save_start = true,
         save_end = true,
         seed = nothing,
         rng = nothing,
-        alias_jump = Threads.threadid() == 1,
+        alias = nothing,
+        alias_jump = KeywordNotPassed(),
         saveat = nothing,
         callback = nothing,
         tstops = nothing,
         numsteps_hint = 100)
-
-    # hack until alias system is in place
-    alias_tstops = false
+    check_alias_jump_removed(jump_prob, alias_jump)
+    alias_u0, alias_p, alias_tstops = ssa_alias_choices(alias)
 
     if !(jump_prob.prob isa DiscreteProblem)
         error("SSAStepper only supports DiscreteProblems.")
@@ -303,16 +374,18 @@ function SciMLBase.__init(jump_prob::JumpProblem,
 
     _rng = resolve_rng(rng, seed)
 
-    if alias_jump
-        cb = jump_prob.jump_callback.discrete_callbacks[end]
-    else
-        cb = deepcopy(jump_prob.jump_callback.discrete_callbacks[end])
-    end
+    # The problem's jump state is always reused and re-initialized below; callers
+    # isolate problems used concurrently (e.g. via `deepcopy` or an `EnsembleProblem`).
+    cb = jump_prob.jump_callback.discrete_callbacks[end]
     opts = (callback = CallbackSet(callback),)
+
+    # Defaults match OrdinaryDiffEq: copy `u0` and reuse `p`.
+    u0 = (alias_u0 === true) ? prob.u0 : recursivecopy(prob.u0)
+    p = (alias_p === false) ? recursivecopy(prob.p) : prob.p
 
     if save_start
         t = [prob.tspan[1]]
-        u = [copy(prob.u0)]
+        u = [recursivecopy(u0)]
     else
         t = typeof(prob.tspan[1])[]
         u = typeof(prob.u0)[]
@@ -346,22 +419,23 @@ function SciMLBase.__init(jump_prob::JumpProblem,
     (tdir <= 0) &&
         error("The time interval to solve over is non-increasing, i.e. tspan[2] <= tspan[1]. This is not allowed for pure jump problem.")
 
-    # Stash callable tstops (e.g. SymbolicTstops); use empty vector for init.
+    # Stash callable tstops (e.g. SymbolicTstops); use an owned empty vector for init.
+    tType = eltype(prob.tspan)
     if tstops === nothing
-        alias_tstops = true
         callable_tstops = nothing
-        _tstops = eltype(jump_prob.prob.tspan)[]
+        _tstops, _alias_tstops, copied_tstops = tType[], true, true
     elseif tstops isa AbstractArray || tstops isa Tuple || tstops isa Number
         callable_tstops = nothing
-        _tstops = tstops
+        _tstops, _alias_tstops, copied_tstops = ssa_init_tstops(tstops, tType, alias_tstops)
     else
         callable_tstops = tstops
-        _tstops = eltype(jump_prob.prob.tspan)[]
+        _tstops, _alias_tstops, copied_tstops = tType[], true, true
     end
 
-    integrator = SSAIntegrator(prob.f, copy(prob.u0), prob.tspan[1], prob.tspan[1], tdir,
-        prob.p, sol, 1, prob.tspan[1], cb, _saveat, save_everystep,
-        save_end, cur_saveat, opts, _tstops, 1, false, true, alias_tstops, false, _rng)
+    integrator = SSAIntegrator(prob.f, u0, prob.tspan[1], prob.tspan[1], tdir,
+        p, sol, 1, prob.tspan[1], cb, _saveat, save_everystep,
+        save_end, cur_saveat, opts, _tstops, 1, false, true, _alias_tstops,
+        copied_tstops, _rng)
     cb.initialize(cb, integrator.u, prob.tspan[1], integrator)
     DiffEqBase.initialize!(opts.callback, integrator.u, prob.tspan[1], integrator)
     if save_start
@@ -439,8 +513,7 @@ function DiffEqBase.step!(integrator::SSAIntegrator)
         # Split to help prediction
         while integrator.cur_saveat <= length(integrator.saveat) &&
               integrator.saveat[integrator.cur_saveat] < integrator.t
-            push!(integrator.sol.t, integrator.saveat[integrator.cur_saveat])
-            push!(integrator.sol.u, copy(integrator.u))
+            save_current_state!(integrator, integrator.saveat[integrator.cur_saveat])
             integrator.cur_saveat += 1
         end
     end
@@ -477,8 +550,7 @@ function DiffEqBase.savevalues!(integrator::SSAIntegrator, force = false)
     if integrator.save_everystep || force
         saved = true
         savedexactly = true
-        push!(integrator.sol.t, integrator.t)
-        push!(integrator.sol.u, copy(integrator.u))
+        save_current_state!(integrator, integrator.t)
     end
 
     saved, savedexactly

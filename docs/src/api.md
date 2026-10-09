@@ -13,6 +13,7 @@ PureLeaping
 SSAStepper
 SplitCoupledJumpProblem
 reset_aggregated_jumps!
+remake(::JumpProblem)
 ```
 
 ## Jump Types
@@ -122,6 +123,80 @@ ODE/SDE integrators a `JumpProblem` can be paired with.
 Anything else from SciMLBase -- the BVP, DAE, DDE, nonlinear and optimization problem
 classes, the SciML operators, and the internals -- is not re-exported here; import it
 from SciMLBase directly.
+
+## [Jump state ownership and problem reuse](@id jump_state_ownership)
+
+A [`JumpProblem`](@ref) stores mutable jump state: the jump aggregator and its
+callbacks. Solvers owned by JumpProcesses ([`SSAStepper`](@ref) and the
+OrdinaryDiffEq ODE/DAE pathways) reuse this state directly and re-initialize it
+from the current state and parameters at every `init`. They never copy it.
+Consequently:
+
+  - Repeated serial solves of one problem are safe and avoid any copying.
+  - One `JumpProblem` supports one active solve or integrator at a time.
+    Concurrent solves from threads or tasks, and integrators that are alive at the
+    same time, each need an independent copy, such as `deepcopy(jprob)`.
+  - [`remake`](@ref remake(::JumpProblem)) shares the original's jump state, so
+    remade problems are not independent for concurrent use.
+  - `EnsembleProblem` supplies isolation. `EnsembleSerial` reuses the problem
+    sequentially. `EnsembleThreads` with `safetycopy = false` copies the problem
+    once per spawned task, with a serial fallback for one thread or a single
+    trajectory. `safetycopy = true` copies the problem before every trajectory,
+    before `prob_func` runs.
+
+The [ensembles and problem reuse tutorial](@ref ensembles_problem_reuse) shows
+patterns that balance performance and safety, including ensemble hooks, stateful
+callbacks, manual threading, and distributed ensembles.
+
+The `alias_jump` keyword argument has been removed; passing it raises an error.
+The plural `alias_jumps` is not a solver keyword argument either: `solve` and
+`init` reject it through SciMLBase's keyword validation, and multi-trajectory
+`EnsembleGPUKernel` solves, which bypass that validation, reject it explicitly.
+
+### Aliasing `SSAStepper` inputs
+
+[`SSAStepper`](@ref) supports the common SciML `alias` keyword argument for its
+`u0`, `p`, and `tstops` inputs. Pass a `Bool` to apply one choice to all three, a
+`SciMLBase.DiscreteAliasSpecifier` to control `u0` and `p`, or an
+`ODEAliasSpecifier` to also control `tstops`. A field set to `true` permits
+aliasing, `false` requests a copy, and `nothing` selects the default:
+
+| Input    | Default (`nothing`)                  | `true`                                               | `false`                     |
+|:-------- |:------------------------------------ |:---------------------------------------------------- |:--------------------------- |
+| `u0`     | copied with `recursivecopy`          | the integrator uses and mutates `u0`                 | copied                      |
+| `p`      | reused                               | reused                                               | copied with `recursivecopy` |
+| `tstops` | the caller's array is never modified | new stops may be inserted into the caller's `Vector` | copied at `init`            |
+
+`tstops` may be a number, a tuple, or an `AbstractVector` of times (such as a
+range or view), or a callable `(p, tspan) -> times`. Only a `Vector` of the time
+type can be aliased; other supported inputs are copied into a new `Vector` at
+`init`. `alias` never controls jump state; for example,
+`alias = false` does not give a solve its own jump aggregator.
+
+```julia
+sol = solve(jprob, SSAStepper(); alias = SciMLBase.DiscreteAliasSpecifier(alias_p = false))
+```
+
+### Coupled ODE/DAE problems
+
+For a `JumpProblem` wrapping an ODE or DAE problem, `alias` is passed unchanged to
+the underlying solver. OrdinaryDiffEq solvers, including its DAE solvers, require
+an `ODEAliasSpecifier`. The jump state is always reused, as described above.
+
+### StochasticDiffEq SDE/RODE problems
+
+StochasticDiffEq owns jump-state copying for SDE and RODE problems. Pass
+`alias = SciMLBase.SDEAliasSpecifier(; alias_jumps = false)`, or
+`SciMLBase.RODEAliasSpecifier` for RODE problems, to copy the jump state, or set
+`alias_jumps = true` to reuse it. When the field is unspecified, the backend
+reuses the jump state on thread 1 and copies it on other threads. This backend
+ignores the removed `alias_jump` keyword.
+
+### Kernel ensembles
+
+Multi-trajectory [`EnsembleGPUKernel`](@ref) solves always build device-owned
+state. They reject the removed `alias_jump` keyword and any `alias` value other
+than `nothing`. With `trajectories = 1`, the serial solver's rules apply.
 
 ## Random Number Generator Control
 
@@ -237,20 +312,14 @@ inputs. Both routes use the backend's JumpProblem initializer, including its RNG
 policy, jump-state copying, and callback setup. DiffEqBase merges stored problem
 keywords and user callbacks before dispatching `init`.
 
-Control stochastic jump-state copying through the backend's alias specifier:
-`alias = SciMLBase.SDEAliasSpecifier(; alias_jumps = false)` for SDE problems,
-or `SciMLBase.RODEAliasSpecifier` for RODE problems. Set the `alias_jumps` field
-to `true` to reuse the original jump state. When that field is unspecified, the
-backend aliases on thread 1 and copies on other threads. Both `solve` and `init`
-follow this policy; `alias_jumps` is a field of the specifier, not a standalone
-keyword argument.
-
-The singular `alias_jump` keyword is no longer consumed on the SDE `init`
-path; use the backend alias specifier above. JumpProcesses-owned SSAStepper
-and ODE/DAE initialization retain `alias_jump`, defaulting to `true` on
-thread 1 and `false` on other threads. Independent mutable jump state is
-still required for concurrent solves, including when using
-`EnsembleProblem(...; safetycopy = false)`.
+Jump-state copying on these pathways follows the backend's alias specifier; see
+[Jump state ownership and problem reuse](@ref jump_state_ownership). In contrast,
+`SSAStepper` and `__jump_init` never copy jump state: they build the integrator
+around the problem's own jump callbacks, which `init` re-initializes. `__jump_init`
+raises the removed-`alias_jump` error and forwards `alias` unchanged to the
+underlying solver. JumpProcesses still defines the transitional
+`resetted_jump_problem` and `reset_jump_problem!` helpers for released
+StochasticDiffEq versions, but no longer calls them itself.
 
 For **tau-leaping**, JumpProcesses defines a custom `DiffEqBase.solve` that
 bypasses the standard `__solve`/`__init` pathway. It calls `resolve_rng`

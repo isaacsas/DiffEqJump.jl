@@ -32,6 +32,7 @@ import SciMLBase: plot_indices
 import DataStructures: update!
 import Graphs: neighbors, outdegree
 import RecursiveArrayTools: recursivecopy!
+using RecursiveArrayTools: RecursiveArrayTools, copyat_or_push!, recursivecopy
 import SymbolicIndexingInterface as SII
 
 # Import additional types and functions from DiffEqBase and SciMLBase

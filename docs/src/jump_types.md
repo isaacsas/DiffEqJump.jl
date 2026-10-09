@@ -428,13 +428,16 @@ When running many simulations, it can often be convenient to update the initial
 condition or simulation parameters without having to create and initialize a new
 `JumpProblem`. In such situations `remake` can be used to change the initial
 condition, time span, and the parameter vector. **Note,** the new `JumpProblem`
-will alias internal data structures from the old problem, including core
-components of the SSA aggregators. Sequential solves refresh parameter-mapped
-mass-action working rates from each problem's current parameters; `remake`
-does not overwrite rates in a shared parameter-mapped definition. For concurrent
-solves, create independent problem copies. `SortingDirect` also retains its
-learned search order, so a reused problem can have different initial sampling
-state even with the same seed.
+shares the old problem's jump state, including the SSA aggregator and jump
+callbacks. Sequential solves are safe: each `init` re-initializes that state,
+including parameter-mapped mass-action working rates, from the problem being
+solved, and `remake` does not overwrite rates in a shared parameter-mapped
+definition. The original and remade problems must not be solved concurrently, or
+used for integrators that are alive at the same time; create independent copies
+with `deepcopy` instead. See the
+[ensembles and problem reuse tutorial](@ref ensembles_problem_reuse).
+`SortingDirect` also retains its learned search order, so a reused problem can
+have different initial sampling state even with the same seed.
 
 As an example, consider the following SIR model:
 

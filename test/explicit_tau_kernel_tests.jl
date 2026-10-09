@@ -164,5 +164,6 @@ function run_explicit_tau_kernel_tests(backend, nsims)
     run_kernel_massaction_rate_tests(backend, SimpleExplicitTauLeaping(), PureLeaping())
     rng_prob = leaping_prob([5.0], [Pair{Int, Int}[]], [[1 => 1]], [0.0], (0.0, 4.0))
     run_kernel_rng_tests(backend, SimpleExplicitTauLeaping(), rng_prob; saveat = 1.0)
+    run_kernel_alias_tests(backend, SimpleExplicitTauLeaping(), rng_prob; saveat = 1.0)
     return nothing
 end

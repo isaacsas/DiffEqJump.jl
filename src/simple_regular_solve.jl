@@ -1156,6 +1156,13 @@ the backend's API, such as `CUDA.seed!`, before calling `solve`.
 With `trajectories = 1`, execution delegates to `EnsembleSerial()` on the CPU
 and accepts its usual `rng`, `seed`, and ensemble `rng_func` keywords.
 
+## Aliasing
+
+Kernels always build device-owned state. For multiple trajectories, the removed
+`alias_jump` keyword raises its migration error, and the `alias_jumps` keyword and any
+`alias` value other than `nothing` raise an `ArgumentError`. With `trajectories = 1`, the serial solver's rules
+apply: `SSAStepper` supports `alias`, while the tau-leaping solvers reject both keywords.
+
 ## Returns
 
   - A `SciMLBase.EnsembleAlgorithm` value for use as the ensemble algorithm argument to

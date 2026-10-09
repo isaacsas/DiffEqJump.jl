@@ -75,10 +75,10 @@ end
         prob = DiscreteProblem([0], (0.0, 1.0))
         jump = ConstantRateJump(rate, affect!)
         jprob = JumpProblem(prob, Direct(), jump; save_positions)
-        # Each solve owns a fresh problem and RNG; keep access to its counters
-        # even when this test is invoked on a worker thread.
-        sol = solve(
-            jprob, SSAStepper(); saveat, save_start, save_end, rng, alias_jump = true)
+        # Each solve owns a fresh problem and RNG. SSAStepper reuses the problem's jump
+        # state rather than copying it, so the captured event log and RNG counters
+        # observe every draw, even when this test runs on a worker thread.
+        sol = solve(jprob, SSAStepper(); saveat, save_start, save_end, rng)
         sol, events, (rng.exponential_draws, rng.uniform_draws)
     end
 

@@ -10,7 +10,7 @@ using JumpProcesses, Test
         jprob = JumpProblem(prob, algorithm, maj)
         # A parameter change after construction must be seen by initialization.
         prob.p[1] = 12.0
-        integrator = init(jprob, SSAStepper(); seed = 12345, alias_jump = true)
+        integrator = init(jprob, SSAStepper(); seed = 12345)
         @test jprob.discrete_jump_aggregation.maj_rates == [2.0]
         integrator.p[1] = 18.0
         reset_aggregated_jumps!(integrator)
@@ -18,7 +18,7 @@ using JumpProcesses, Test
         @test jprob.massaction_jump.scaled_rates === nothing
 
         remade = remake(jprob; p = [24.0])
-        init(remade, SSAStepper(); seed = 12345, alias_jump = true)
+        init(remade, SSAStepper(); seed = 12345)
         @test remade.discrete_jump_aggregation.maj_rates == [4.0]
         @test jprob.prob.p == [18.0]
         @test remade.massaction_jump === jprob.massaction_jump
@@ -32,7 +32,7 @@ end
         jprob = JumpProblem(prob, algorithm, maj;
             spatial_system = CartesianGrid((2,)), hopping_constants = zeros(2))
         prob.p[1] = 12.0
-        integrator = init(jprob, SSAStepper(); seed = 12345, alias_jump = true)
+        integrator = init(jprob, SSAStepper(); seed = 12345)
         rx_rates = jprob.discrete_jump_aggregation.rx_rates
         @test rx_rates.maj_rates == [2.0]
         @test rx_rates.rates == [240.0 1008.0]
@@ -43,7 +43,7 @@ end
         @test jprob.massaction_jump.scaled_rates === nothing
 
         remade = remake(jprob; p = [24.0])
-        init(remade, SSAStepper(); seed = 12345, alias_jump = true)
+        init(remade, SSAStepper(); seed = 12345)
         @test remade.discrete_jump_aggregation.rx_rates.maj_rates == [4.0]
         @test remade.discrete_jump_aggregation.rx_rates.rates == [480.0 2016.0]
         @test jprob.prob.p == [18.0]
@@ -62,7 +62,7 @@ end
             spatial_system = CartesianGrid((2,)), hopping_constants = zeros(2, 2))
         @test jprob.massaction_jump.scaled_rates == [0.0, 0.0, 0.0, 0.0, 2.0, 2.0]
         @test jprob.prob.u0 == [6, 0, 9, 0]
-        init(jprob, SSAStepper(); seed = 12345, alias_jump = true)
+        init(jprob, SSAStepper(); seed = 12345)
         @test jprob.discrete_jump_aggregation.maj_rates ==
               jprob.massaction_jump.scaled_rates
         if parameterized

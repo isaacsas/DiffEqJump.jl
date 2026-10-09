@@ -22,7 +22,22 @@ instead of an ODE/SDE time stepper can give a significant performance boost.
 In [Remaking `JumpProblem`s](@ref) we show how to modify parameters, the initial
 condition, and other components of a generated `JumpProblem`. This can be useful
 when trying to call `solve` many times while avoiding reallocations of the
-internal aggregators for each new parameter value or initial condition.
+internal aggregators for each new parameter value or initial condition. Remade
+problems share the original's jump state, so they can be solved one after
+another but not concurrently. The
+[ensembles and problem reuse tutorial](@ref ensembles_problem_reuse) shows how
+to combine `remake` with `EnsembleProblem`s safely.
+
+## Can I solve the same `JumpProblem` from multiple threads or tasks?
+
+Not directly. Solvers owned by JumpProcesses reuse a `JumpProblem`'s jump
+aggregator and callbacks rather than copying them, so one problem supports one
+active solve or integrator at a time. For concurrent solves, give each task its
+own `deepcopy` of the problem, made once per task and reused for that task's
+solves, or use an `EnsembleProblem`, which makes these copies for you. Problems
+created with `remake` share the original's jump state and are not independent.
+See [Jump state ownership and problem reuse](@ref jump_state_ownership) and the
+[ensembles and problem reuse tutorial](@ref ensembles_problem_reuse).
 
 ## How can I define collections of many different jumps and pass them to `JumpProblem`?
 

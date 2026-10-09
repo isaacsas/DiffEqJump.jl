@@ -320,6 +320,7 @@ function SciMLBase.__solve(ensembleprob::SciMLBase.AbstractEnsembleProblem,
                would have to run inside the GPU kernel.")
 
     ensemblealg.backend === nothing ? backend = CPU() : backend = ensemblealg.backend
+    reject_kernel_alias_kwargs(kwargs)
     seed_kernel_backend!(backend, seed, rng, kwargs)
 
     jump_prob = ensembleprob.prob
