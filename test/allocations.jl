@@ -14,7 +14,7 @@ let
     function affect1!(integrator)
         integrator.u[1] -= 1         # S -> S - 1
         integrator.u[2] += 1         # I -> I + 1
-        return nothing
+        nothing
     end
     jump = ConstantRateJump(rate1, affect1!)
 
@@ -22,7 +22,7 @@ let
     function affect2!(integrator)
         integrator.u[2] -= 1        # I -> I - 1
         integrator.u[3] += 1        # R -> R + 1
-        return nothing
+        nothing
     end
     jump2 = ConstantRateJump(rate2, affect2!)
 
@@ -55,10 +55,8 @@ let
         return (η / K) * (K - (X + Y))
     end
 
-    function makeprob(;
-            T = 100.0, alg = Direct(), save_positions = (false, false),
-            graphkwargs = (;), rng
-        )
+    function makeprob(; T = 100.0, alg = Direct(), save_positions = (false, false),
+            graphkwargs = (;), rng)
         r1(u, p, t) = rate(p[1], u[1], u[2], p[2]) * u[1]
         r2(u, p, t) = rate(p[1], u[2], u[1], p[2]) * u[2]
         r3(u, p, t) = p[3] * u[1]
@@ -71,26 +69,24 @@ let
         aff4!(integrator) = integrator.u[2] -= 1
         function aff5!(integrator)
             integrator.u[1] -= 1
-            return integrator.u[2] += 1
+            integrator.u[2] += 1
         end
         function aff6!(integrator)
             integrator.u[1] += 1
-            return integrator.u[2] -= 1
+            integrator.u[2] -= 1
         end
         #    η    K    μ    γ     ρ
-        p = (1.0, 1.0e4, 0.1, 1.0e-4, 0.01)
+        p = (1.0, 1e4, 0.1, 1e-4, 0.01)
         u0 = [1000, 10]
         tspan = (0.0, T)
 
         dprob = DiscreteProblem(u0, tspan, p)
-        jprob = JumpProblem(
-            dprob, alg,
+        jprob = JumpProblem(dprob, alg,
             ConstantRateJump(r1, aff1!), ConstantRateJump(r2, aff2!),
             ConstantRateJump(r3, aff3!),
             ConstantRateJump(r4, aff4!), ConstantRateJump(r5, aff5!),
             ConstantRateJump(r6, aff6!);
-            save_positions, rng, graphkwargs...
-        )
+            save_positions, rng, graphkwargs...)
         return jprob
     end
 
@@ -120,22 +116,16 @@ end
 # Measured through a function barrier: at non-function scope Julia 1.10's
 # `@allocated` counts the boxed Float64 return value (16 bytes).
 function alloc_total_rate(cache, u, p, t)
-    return @allocated JumpProcesses.total_variable_rate(cache, u, p, t)
+    @allocated JumpProcesses.total_variable_rate(cache, u, p, t)
 end
 let
     for n in (10, 40)
         f!(du, u, p, t) = (du .= 0; nothing)
-        jumps = [
-            VariableRateJump(
-                (u, p, t) -> p[1] * (1 + u[i]) * t,
-                integ -> (integ.u[i] += 1; nothing)
-            ) for i in 1:n
-        ]
+        jumps = [VariableRateJump((u, p, t) -> p[1] * (1 + u[i]) * t,
+                     integ -> (integ.u[i] += 1; nothing)) for i in 1:n]
         oprob = ODEProblem(f!, zeros(n), (0.0, 1.0), (0.5,))
-        jprob = JumpProblem(
-            oprob, Direct(), jumps...; vr_aggregator = VR_Direct(),
-            rng = StableRNG(1)
-        )
+        jprob = JumpProblem(oprob, Direct(), jumps...; vr_aggregator = VR_Direct(),
+            rng = StableRNG(1))
         cache = jprob.jump_callback.continuous_callbacks[1].condition
         u, p, t = oprob.u0, oprob.p, 0.3
         @test JumpProcesses.total_variable_rate(cache, u, p, t) ≈ n * 0.5 * 0.3
@@ -148,17 +138,13 @@ end
 # tuple-based constant rate aggregators must not allocate per step for more than 32 jumps
 let
     n = 40
-    jumps = [
-        ConstantRateJump((u, p, t) -> p[1], integ -> (integ.u[i] += 1; nothing))
-            for i in 1:n
-    ]
+    jumps = [ConstantRateJump((u, p, t) -> p[1], integ -> (integ.u[i] += 1; nothing))
+             for i in 1:n]
     for agg in (Direct(), FRM())
         nallocs = map((10.0, 100.0)) do T
             dprob = DiscreteProblem(zeros(Int, n), (0.0, T), (0.5,))
-            jprob = JumpProblem(
-                dprob, agg, jumps...; save_positions = (false, false),
-                rng = StableRNG(1)
-            )
+            jprob = JumpProblem(dprob, agg, jumps...; save_positions = (false, false),
+                rng = StableRNG(1))
             solve(jprob, SSAStepper())
             @allocations solve(jprob, SSAStepper())
         end
