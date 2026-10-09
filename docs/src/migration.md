@@ -194,3 +194,28 @@ mutable RNG from a custom ensemble `rng_func`.
 For identical seeded trajectories, start from identical learned state as well
 as identical model inputs; reusing a problem with a different learned order
 can change the trajectory.
+
+## Evaluating an `SSAStepper` integrator at earlier times
+
+`integrator(t)` and `integrator(out, t)` previously returned the current state of
+an `SSAStepper` integrator for any `t`. That was silently wrong for times before
+the most recent event, which callbacks such as DiffEqCallbacks' `SavingCallback`
+and `FunctionCallingCallback` request at their save times. Evaluating at a time
+other than `integrator.t` now raises an error, and there are two remedies:
+
+```julia
+using DiffEqCallbacks
+saved = SavedValues(Float64, Int)
+cb = SavingCallback((u, t, integrator) -> sum(u), saved; saveat = 0.0:1.0:10.0)
+
+# Keep the state at the start of each step, at the cost of a copy per step:
+sol = solve(jprob, SSAStepper(; save_uprev = true); callback = cb)
+
+# Or stop exactly at the save times, avoiding the per-step copy:
+sol = solve(jprob, SSAStepper(); callback = cb, tstops = 0.0:1.0:10.0)
+```
+
+`SSAStepper` is now a parametric type, but `SSAStepper()` is unchanged. See
+[Saving with callbacks and evaluating the integrator](@ref ssa_integrator_evaluation)
+for when to choose each remedy, and [Supported state types](@ref ssa_state_types)
+for the state types `SSAStepper` supports.

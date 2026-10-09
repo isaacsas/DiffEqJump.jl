@@ -251,7 +251,7 @@ function SciMLBase.__solve(ensembleprob::SciMLBase.AbstractEnsembleProblem,
     end
 
     ensemblealg.backend === nothing ? backend = CPU() : backend = ensemblealg.backend
-    reject_kernel_alias_kwargs(kwargs)
+    reject_kernel_alias_kwargs(ensembleprob.prob, kwargs)
     seed_kernel_backend!(backend, seed, rng, kwargs)
 
     jump_prob = ensembleprob.prob

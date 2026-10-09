@@ -66,6 +66,8 @@ struct SortingDirect <: AbstractAggregatorAlgorithm end
 """
 The Rejection SSA method. One of the best methods for systems with hundreds to
 many thousands of jumps (along with `RSSACR`) and sparse dependency graphs.
+Requires an array state, such as a `Vector` or `SVector`; scalar states are not
+supported.
 
 V. H. Thanh, C. Priami and R. Zunino, Efficient rejection-based simulation of
 biochemical reactions with stochastic noise and delays, Journal of Chemical
@@ -79,7 +81,8 @@ struct RSSA <: AbstractAggregatorAlgorithm end
 
 """
 The Rejection SSA Composition-Rejection method. Often the best performer for
-systems with tens of thousands of jumps and sparse dependency graphs.
+systems with tens of thousands of jumps and sparse dependency graphs. Requires an
+array state, such as a `Vector` or `SVector`; scalar states are not supported.
 
 V. H. Thanh, R. Zunino, and C. Priami, Efficient constant-time complexity
 algorithm for stochastic simulation of large reaction networks, IEEE/ACM
@@ -161,7 +164,8 @@ struct CCNRM <: AbstractAggregatorAlgorithm end
 The Next Subvolume Method for spatial jump process simulations. Usually slower
 than `DirectCRDirect`. Uses an indexed priority queue tree structure to
 determine where on the grid/graph the next jump occurs, and then the `Direct`
-method to determine which jump at the given location occurs.
+method to determine which jump at the given location occurs. The state is a
+species × sites matrix, with `u[i, j]` the number of species `i` at site `j`.
 
 Elf, Johan and Ehrenberg, M, Spontaneous separation of bi-stable biochemical
 systems into spatial domains of opposite phases,Systems Biology, 1(2), 230-236
@@ -172,7 +176,8 @@ struct NSM <: AbstractAggregatorAlgorithm end
 """
 The Direct Composition-Rejection Direct method. Uses the `DirectCR` method to
 determine where on the grid/graph a jump occurs, and the `Direct` method to
-determine which jump occurs at the sampled location.
+determine which jump occurs at the sampled location. The state is a species × sites
+matrix, with `u[i, j]` the number of species `i` at site `j`.
 
 Kevin R. Sanft and Hans G. Othmer, Constant-complexity stochastic simulation
 algorithm with optimal binning,  Journal of Chemical Physics 143, 074108

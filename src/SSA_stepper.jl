@@ -4,6 +4,56 @@ $(TYPEDEF)
 Highly efficient integrator for pure jump problems that involve only `ConstantRateJump`s,
 `MassActionJump`s, and/or `VariableRateJump`s *with rate bounds*.
 
+## Constructor
+
+```julia
+SSAStepper(; save_uprev = false)
+```
+
+  - `save_uprev`: whether the integrator keeps the state at the start of each step in
+    `integrator.uprev`, so that it can be evaluated anywhere in the current step (see
+    "Evaluating the integrator" below). This copies the state on every step, at a cost
+    proportional to the size of the state, which can dominate the per-step cost of
+    efficient aggregators on large or spatial systems. `SSAStepper()` keeps no copy.
+
+## Supported state types
+
+The state `u` can be a `Vector` or an `SVector` of integers or floats; a species × sites
+`Matrix{Int}` for spatial problems, which `NSM` and `DirectCRDirect` keep and other
+aggregators flatten into a `Vector`; or, for models without `MassActionJump`s, an integer
+or float scalar (not with `RSSA` or `RSSACR`). Bounded
+`VariableRateJump`s require `Coevolve`, and `affect!` functions for `SVector` and scalar
+states must assign a new value to `integrator.u`. Other state types are not supported. See
+the [supported state
+types](https://docs.sciml.ai/JumpProcesses/stable/jump_solve/#ssa_state_types) for
+details.
+
+## Evaluating the integrator
+
+Callbacks, such as DiffEqCallbacks' `SavingCallback` and `FunctionCallingCallback` with
+save times, may evaluate the integrator at times before the current one with
+`integrator(t)` or `integrator(out, t)`. The sampled path is piecewise constant, and
+jumps and callbacks only change the state at the end of a step, so:
+
+  - Evaluating at the current time, `integrator.t`, returns the current state.
+  - With `SSAStepper(; save_uprev = true)`, evaluating at any `t` in
+    `[integrator.tprev, integrator.t)` returns the state at the start of the step,
+    `integrator.uprev`. `get_tmp_cache(integrator)` then also provides scratch space for
+    callbacks that evaluate the integrator in place.
+  - Any other time raises an `ArgumentError`: a path cannot be extrapolated, and earlier
+    states are only available from the saved solution. With the default,
+    `SSAStepper()`, every time other than `integrator.t` raises this error, as does
+    `get_tmp_cache`.
+
+`integrator(t)` returns a copy for array states, and `integrator(out, t)` writes into
+`out` and returns it. Instead of `save_uprev = true`, the times at which callbacks
+evaluate the integrator can be passed as `tstops`, so that it stops exactly at them. This
+avoids the per-step copy, but adds a stop and a pass through the callbacks at each time,
+and, when every jump is saved, a saved point at each stop, so pair it with
+`save_positions = (false, false)`. To save the full state, `saveat` is exact and needs
+neither. DiffEqCallbacks' integrating callbacks (`IntegratingCallback`,
+`IntegratingSumCallback`) are not yet supported with `SSAStepper`.
+
 ## Notes
 
   - Only works with `JumpProblem`s defined from `DiscreteProblem`s.
@@ -76,7 +126,18 @@ see the
 [tutorial](https://docs.sciml.ai/JumpProcesses/stable/tutorials/discrete_stochastic_example/)
 for details.
 """
-struct SSAStepper <: SciMLBase.AbstractDEAlgorithm end
+struct SSAStepper{SaveUprev} <: SciMLBase.AbstractDEAlgorithm
+    function SSAStepper{S}() where {S}
+        S isa Bool ||
+            throw(ArgumentError("The `SSAStepper` type parameter must be a `Bool`, got $S."))
+        new{S}()
+    end
+end
+SSAStepper(; save_uprev::Bool = false) = SSAStepper{save_uprev}()
+
+# Whether the integrator keeps the state at the start of each step (`save_uprev`).
+ssa_save_uprev(::SSAStepper{S}) where {S} = S
+
 SciMLBase.allows_late_binding_tstops(::SSAStepper) = true
 SciMLBase.supports_solve_rng(::JumpProblem, ::SSAStepper) = true
 
@@ -89,7 +150,7 @@ Integrator for pure jump problems solved via `SSAStepper`.
 
 $(FIELDS)
 """
-mutable struct SSAIntegrator{F, uType, tType, tdirType, P, S, CB, SA, OPT, TS, R} <:
+mutable struct SSAIntegrator{F, uType, tType, tdirType, P, S, CB, SA, OPT, TS, R, UP, TC} <:
                AbstractSSAIntegrator{SSAStepper, Nothing, uType, tType}
     """
     The underlying `prob.f` function. Not currently used.
@@ -104,9 +165,15 @@ mutable struct SSAIntegrator{F, uType, tType, tdirType, P, S, CB, SA, OPT, TS, R
     """
     t::tType
     """
-    The previous time a jump occurred.
+    The time at the start of the current step. A step ends at the next jump or `tstop`,
+    and `solve!`'s final advance to the end time also counts as a step.
     """
     tprev::tType
+    """
+    The state at the start of the current step, at time `tprev`, when solving with
+    `SSAStepper(; save_uprev = true)`; otherwise `nothing`.
+    """
+    uprev::UP
     """
     The direction time is changing in (must be positive, indicating time is increasing)
     """
@@ -167,6 +234,11 @@ mutable struct SSAIntegrator{F, uType, tType, tdirType, P, S, CB, SA, OPT, TS, R
     The random number generator.
     """
     rng::R
+    """
+    Scratch space returned by `get_tmp_cache` for `save_uprev = true` and array states
+    other than `SVector`s; otherwise `nothing`.
+    """
+    tmp_cache::TC
 end
 
 SciMLBase.has_rng(::SSAIntegrator) = true
@@ -184,17 +256,93 @@ function SciMLBase.set_rng!(integrator::SSAIntegrator, rng)
     nothing
 end
 
-(integrator::SSAIntegrator)(t) = recursivecopy(integrator.u)
-# Copy the current state into `out` and return it. Nested arrays are copied recursively,
-# like saved states; other states, including scalars, are broadcast into `out`.
-function (integrator::SSAIntegrator)(out, t)
-    u = integrator.u
-    if u isa AbstractArray && eltype(u) <: AbstractArray
-        recursivecopy!(out, u)
+# Copy the state `src` into the existing array `dest`. Nested arrays are copied
+# recursively, like saved states; other states, including scalars and `SVector`s, are
+# broadcast into `dest`.
+@inline function copy_state!(dest, src)
+    if src isa AbstractArray && eltype(src) <: AbstractArray
+        recursivecopy!(dest, src)
     else
-        out .= u
+        dest .= src
     end
-    return out
+    return dest
+end
+
+# Store the state at the start of a step in `uprev` (only with `save_uprev = true`).
+# Scalar and `SVector` states are replaced; other states are copied into the existing
+# buffer, so no allocation occurs.
+@inline store_uprev!(integrator::SSAIntegrator) = store_uprev!(integrator, integrator.uprev)
+@inline store_uprev!(::SSAIntegrator, ::Nothing) = nothing
+@inline function store_uprev!(integrator::SSAIntegrator, uprev)
+    u = integrator.u
+    if u isa Union{Number, SVector}
+        integrator.uprev = u
+    else
+        copy_state!(uprev, u)
+    end
+    return nothing
+end
+
+# The `uprev` and `get_tmp_cache` storage for a new integrator: none unless
+# `save_uprev = true`, and no scratch array for scalar and `SVector` states.
+ssa_uprev_storage(::SSAStepper{false}, _) = (nothing, nothing)
+function ssa_uprev_storage(::SSAStepper{true}, u0)
+    if u0 isa Union{Number, SVector}
+        return u0, nothing
+    else
+        return recursivecopy(u0), recursivecopy(u0)
+    end
+end
+
+# The state at time `t`, which must be `integrator.t`, or, with `save_uprev = true`, lie
+# in `[integrator.tprev, integrator.t)`, where the state equals `uprev`, since jumps and
+# callbacks only change the state at the end of a step.
+@inline function state_at(integrator::SSAIntegrator, t)
+    t == integrator.t && return integrator.u
+    uprev = integrator.uprev
+    uprev === nothing && throw_ssa_evaluation_needs_uprev(integrator, t)
+    (integrator.tprev <= t < integrator.t) ||
+        throw_ssa_evaluation_out_of_step(integrator, t)
+    return uprev
+end
+
+@noinline function throw_ssa_evaluation_needs_uprev(integrator, t)
+    throw(ArgumentError("An `SSAStepper` integrator can only be evaluated at its current \
+        time `integrator.t = $(integrator.t)`, but was evaluated at `t = $t`. To evaluate \
+        it anywhere in the current step, `[integrator.tprev, integrator.t]`, as \
+        `SavingCallback`s and `FunctionCallingCallback`s with save times require, solve \
+        with `SSAStepper(; save_uprev = true)`. Alternatively, pass those times as \
+        `tstops`, so that the integrator stops exactly at them."))
+end
+
+@noinline function throw_ssa_evaluation_out_of_step(integrator, t)
+    throw(ArgumentError("An `SSAStepper` integrator can only be evaluated in the current \
+        step, `[integrator.tprev, integrator.t] = [$(integrator.tprev), \
+        $(integrator.t)]`, but was evaluated at `t = $t`. A jump process path cannot be \
+        extrapolated, and states before the current step are only available from the \
+        saved solution."))
+end
+
+@noinline function throw_ssa_tmp_cache_needs_uprev()
+    throw(ArgumentError("`get_tmp_cache` is only available for `SSAStepper` integrators \
+        solved with `SSAStepper(; save_uprev = true)`. It provides scratch space for \
+        callbacks, such as an in-place `SavingCallback`, that evaluate the integrator \
+        at times before `integrator.t`, which requires `save_uprev = true`. \
+        Alternatively, pass the callback's times as `tstops`, so that the integrator \
+        stops exactly at them."))
+end
+
+# Evaluate the piecewise-constant path at time `t`; see `state_at` for the valid times.
+# Returns a copy for array states, and the value itself for scalar and `SVector` states.
+(integrator::SSAIntegrator)(t) = recursivecopy(state_at(integrator, t))
+
+# Copy the state at time `t` into the caller's `out` and return `out`.
+(integrator::SSAIntegrator)(out, t) = copy_state!(out, state_at(integrator, t))
+
+function SciMLBase.get_tmp_cache(integrator::SSAIntegrator)
+    integrator.uprev === nothing && throw_ssa_tmp_cache_needs_uprev()
+    cache = integrator.tmp_cache
+    return cache === nothing ? nothing : (cache,)
 end
 
 # Save a snapshot of the current state, matching OrdinaryDiffEq's save semantics
@@ -247,14 +395,17 @@ function DiffEqBase.solve!(integrator::SSAIntegrator)
 
     # if the user terminated the solve we shouldn't advance in time any more
     if integrator.sol.retcode !== ReturnCode.Terminated
+        # The advance to the end time is a final step without a jump, so it starts a new
+        # step for evaluating the integrator (and `tprev` always marks a step's start).
+        if integrator.t < end_time
+            store_uprev!(integrator)
+            integrator.tprev = integrator.t
+        end
         integrator.t = end_time
 
-        # check callbacks one last time
-        if !(integrator.opts.callback.discrete_callbacks isa Tuple{})
-            DiffEqBase.apply_discrete_callback!(integrator,
-                integrator.opts.callback.discrete_callbacks...)
-        end
-
+        # Save the pending `saveat` times before the end time first: the state there is
+        # the one from before the final callback pass, and saving them afterwards would
+        # also put them after any saves the callbacks make at the end time.
         if integrator.saveat !== nothing && !isempty(integrator.saveat)
             # Split to help prediction
             while integrator.cur_saveat <= length(integrator.saveat) &&
@@ -262,6 +413,12 @@ function DiffEqBase.solve!(integrator::SSAIntegrator)
                 save_current_state!(integrator, integrator.saveat[integrator.cur_saveat])
                 integrator.cur_saveat += 1
             end
+        end
+
+        # check callbacks one last time
+        if !(integrator.opts.callback.discrete_callbacks isa Tuple{})
+            DiffEqBase.apply_discrete_callback!(integrator,
+                integrator.opts.callback.discrete_callbacks...)
         end
 
         if integrator.save_end && integrator.sol.t[end] != end_time
@@ -432,10 +589,14 @@ function SciMLBase.__init(jump_prob::JumpProblem,
         _tstops, _alias_tstops, copied_tstops = tType[], true, true
     end
 
-    integrator = SSAIntegrator(prob.f, u0, prob.tspan[1], prob.tspan[1], tdir,
+    # With `save_uprev = true`, `uprev` and the scratch cache are distinct from `u0`, even
+    # when `u0` aliases the problem's initial condition.
+    uprev, tmp_cache = ssa_uprev_storage(alg, u0)
+
+    integrator = SSAIntegrator(prob.f, u0, prob.tspan[1], prob.tspan[1], uprev, tdir,
         p, sol, 1, prob.tspan[1], cb, _saveat, save_everystep,
         save_end, cur_saveat, opts, _tstops, 1, false, true, _alias_tstops,
-        copied_tstops, _rng)
+        copied_tstops, _rng, tmp_cache)
     cb.initialize(cb, integrator.u, prob.tspan[1], integrator)
     DiffEqBase.initialize!(opts.callback, integrator.u, prob.tspan[1], integrator)
     if save_start
@@ -494,6 +655,7 @@ end
 end
 
 function DiffEqBase.step!(integrator::SSAIntegrator)
+    store_uprev!(integrator)
     integrator.tprev = integrator.t
     next_jump_time = integrator.tstop > integrator.t ? integrator.tstop :
                      typemax(integrator.tstop)
@@ -588,6 +750,6 @@ end
 
 function SciMLBase.isdenseplot(sol::ODESolution{
         T, N, uType, uType2, DType, tType, rateType, discType, P,
-        SSAStepper}) where {T, N, uType, uType2, DType, tType, rateType, discType, P}
+        <:SSAStepper}) where {T, N, uType, uType2, DType, tType, rateType, discType, P}
     sol.dense
 end

@@ -196,7 +196,8 @@ ignores the removed `alias_jump` keyword.
 
 Multi-trajectory [`EnsembleGPUKernel`](@ref) solves always build device-owned
 state. They reject the removed `alias_jump` keyword and any `alias` value other
-than `nothing`. With `trajectories = 1`, the serial solver's rules apply.
+than `nothing`, whether passed to `solve` or stored on the problem wrapped by the
+`JumpProblem`. With `trajectories = 1`, the serial solver's rules apply.
 
 ## Random Number Generator Control
 

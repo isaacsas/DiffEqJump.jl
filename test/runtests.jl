@@ -43,6 +43,7 @@ end
     end
     if GROUP == "All" || GROUP == "InterfaceII"
         @time @safetestset "Saveat Regression test" begin include("saveat_regression.jl") end
+        @time @safetestset "SSAIntegrator evaluation and save_uprev" begin include("ssa_integrator_evaluation.jl") end
         @time @safetestset "Save_positions test" begin include("save_positions.jl") end
         @time @safetestset "RNG kwarg tests" begin include("rng_kwarg_tests.jl") end
         @time @safetestset "Stochastic dispatch tests" begin include("stochastic_dispatch.jl") end

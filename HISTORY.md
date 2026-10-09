@@ -50,7 +50,8 @@ changes are not intended for a 9.x release.
     ensembles and problem reuse for patterns that balance performance and safety.
   - **Breaking**: The `alias_jump` keyword argument has been removed. Passing it to
     `solve`, `init`, `JumpProblem`, or a multi-trajectory `EnsembleGPUKernel`
-    solve raises an error; remove it, and solve a copy of the problem when
+    solve, or storing it on the problem wrapped by a `JumpProblem`, raises an
+    error; remove it, and solve a copy of the problem when
     independent jump state is needed. StochasticDiffEq SDE/RODE solvers ignore the
     keyword and keep their own policy: pass
     `alias = SciMLBase.SDEAliasSpecifier(; alias_jumps = false)` (or
@@ -67,9 +68,34 @@ changes are not intended for a 9.x release.
     independent snapshots. `tstops` given as a number, a tuple, or an
     `AbstractVector` other than a `Vector` of the time type (such as a range or
     view) is copied into a `Vector` at `init`, so `add_tstop!` works with it.
+  - **Breaking**: Evaluating an `SSAStepper` integrator, as `integrator(t)` or
+    `integrator(out, t)`, at a time other than `integrator.t` now raises an error,
+    unless the problem is solved with `SSAStepper(; save_uprev = true)`, which also
+    allows times in the current step, `[integrator.tprev, integrator.t]`.
+    Previously the current state was returned for any `t`, which was silently wrong
+    for times before the most recent event, for example in a `SavingCallback` or
+    `FunctionCallingCallback` with save times. Alternatively, pass such times as
+    `tstops`, so that the integrator stops exactly at them. DiffEqCallbacks'
+    integrating callbacks are not yet supported with `SSAStepper`.
+  - New `SSAStepper(; save_uprev = true)` option: the integrator keeps the state at
+    the start of each step in `integrator.uprev`, copying the state on every step,
+    and provides `get_tmp_cache` for callbacks that evaluate it in place. The
+    default, `SSAStepper()`, keeps no copy. `SSAStepper` is now a parametric type;
+    `SSAStepper()` is unchanged and has type `SSAStepper{false}`. After `solve!`,
+    `integrator.tprev` is the time of the last event or tstop.
+  - Fixed `SSAStepper` saving pending `saveat` times before the end time after its
+    final callback pass. A callback that changed the state at the end time altered the
+    values saved at those earlier times, and the saved times came out of order. They
+    are now saved before the final callback pass.
+  - The state types `SSAStepper` supports are now documented: vectors and
+    `SVector`s of integers or floats, species × sites matrices for spatial
+    problems, and scalars for models without mass-action jumps. See "Supported
+    state types" in the solver documentation.
   - **Breaking**: Multi-trajectory `EnsembleGPUKernel` solves reject `alias` values
-    other than `nothing`, and the `alias_jumps` keyword, since kernels always build
-    device-owned state.
+    other than `nothing` and the `alias_jumps` keyword, whether passed to `solve` or
+    stored on the problem, since kernels always build device-owned state. They
+    also reject `SSAStepper(; save_uprev = true)`, since kernels never expose an
+    integrator.
   - The minimum supported SciMLBase version is now 3.34.
   - `SSAIntegrator` now supports the `SciMLBase` RNG interface (`has_rng`,
     `get_rng`, `set_rng!`).

@@ -1160,8 +1160,11 @@ and accepts its usual `rng`, `seed`, and ensemble `rng_func` keywords.
 
 Kernels always build device-owned state. For multiple trajectories, the removed
 `alias_jump` keyword raises its migration error, and the `alias_jumps` keyword and any
-`alias` value other than `nothing` raise an `ArgumentError`. With `trajectories = 1`, the serial solver's rules
-apply: `SSAStepper` supports `alias`, while the tau-leaping solvers reject both keywords.
+`alias` value other than `nothing` raise an `ArgumentError`, whether passed to `solve` or
+stored on the problem wrapped by the `JumpProblem`. Kernels never expose an integrator, so
+`SSAStepper(; save_uprev = true)` also raises an `ArgumentError`. With
+`trajectories = 1`, the serial solver's rules apply: `SSAStepper` supports `alias` and
+`save_uprev`, while the tau-leaping solvers reject both alias keywords.
 
 ## Returns
 

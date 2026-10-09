@@ -25,18 +25,28 @@ function seed_kernel_backend!(backend, seed, rng, kwargs)
     return nothing
 end
 
+# Keywords stored on the problem wrapped by a `JumpProblem`, e.g. `DiscreteProblem(...;
+# alias_jump = true)`.
+wrapped_problem_kwargs(jump_prob::JumpProblem) = wrapped_problem_kwargs(jump_prob.prob)
+wrapped_problem_kwargs(prob) = hasproperty(prob, :kwargs) ? prob.kwargs : (;)
+
 # Kernels always build device-owned state, so the removed `alias_jump` keyword and
-# `alias` controls are rejected rather than silently ignored. These paths bypass
-# SciMLBase's keyword validation, so the never-supported plural spelling is rejected here.
-function reject_kernel_alias_kwargs(kwargs)
-    haskey(kwargs, :alias_jump) &&
+# `alias` controls are rejected rather than silently ignored, whether passed to `solve`
+# or stored on the wrapped problem. These paths bypass SciMLBase's keyword validation, so
+# the never-supported plural spelling is rejected here too, passed or stored.
+function reject_kernel_alias_kwargs(jump_prob, kwargs)
+    stored = wrapped_problem_kwargs(jump_prob)
+    (haskey(kwargs, :alias_jump) || haskey(stored, :alias_jump)) &&
         throw(ArgumentError(JumpProcesses.ALIAS_JUMP_REMOVED_MSG))
-    haskey(kwargs, :alias_jumps) && throw(ArgumentError(
+    (haskey(kwargs, :alias_jumps) || haskey(stored, :alias_jumps)) && throw(ArgumentError(
         "`alias_jumps` is not a keyword argument; it is a field of some alias " *
         "specifiers. EnsembleGPUKernel always builds device-owned jump state."))
-    get(kwargs, :alias, nothing) === nothing || throw(ArgumentError(
-        "EnsembleGPUKernel does not support the `alias` keyword with multiple " *
-        "trajectories, since kernels always build device-owned state."))
+    (get(kwargs, :alias, nothing) === nothing &&
+     get(stored, :alias, nothing) === nothing) ||
+        throw(ArgumentError(
+            "EnsembleGPUKernel does not support the `alias` keyword, whether passed to " *
+            "`solve` or stored on the problem, with multiple trajectories, since kernels " *
+            "always build device-owned state."))
     return nothing
 end
 
@@ -58,7 +68,7 @@ function SciMLBase.__solve(ensembleprob::SciMLBase.AbstractEnsembleProblem,
 
     ensemblealg.backend === nothing ? backend = CPU() :
     backend = ensemblealg.backend
-    reject_kernel_alias_kwargs(kwargs)
+    reject_kernel_alias_kwargs(ensembleprob.prob, kwargs)
     seed_kernel_backend!(backend, seed, rng, kwargs)
 
     jump_prob = ensembleprob.prob

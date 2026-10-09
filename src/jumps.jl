@@ -566,6 +566,12 @@ jprob = JumpProblem(prob, Direct(), maj)
   - Also see the [main
     docs](https://docs.sciml.ai/JumpProcesses/stable/jump_types/#Defining-a-Mass-Action-Jump)
     for how to specify reactions with no products or no reactants.
+  - For non-spatial problems the state `u` must be a `Vector` or an `SVector` of integers
+    or floats; scalar and other states are not supported. Spatial problems, built by
+    passing `hopping_constants` and a `spatial_system` to `JumpProblem`, use a species ×
+    sites `Matrix{Int}`. `NSM` and `DirectCRDirect` keep the matrix, while other
+    aggregators flatten it into a `Vector`. See the [supported state
+    types](https://docs.sciml.ai/JumpProcesses/stable/jump_solve/#ssa_state_types).
 """
 struct MassActionJump{T, S, U, V} <: AbstractMassActionJump
     """

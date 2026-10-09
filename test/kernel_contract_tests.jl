@@ -75,10 +75,37 @@ function run_kernel_alias_tests(backend, alg, jump_prob; kwargs...)
             alg, EnsembleGPUKernel(backend); trajectories = 16, kwargs...,
             alias_jump = true)
 
+        # The same keywords stored on the wrapped problem are rejected too.
+        wrapped = jump_prob.prob
+        for stored in ((; alias_jump = true), (; alias_jumps = false), (; alias = true),
+            (; alias = SciMLBase.ODEAliasSpecifier(alias_u0 = true)))
+            stored_prob = DiscreteProblem(wrapped.f, wrapped.u0, wrapped.tspan, wrapped.p;
+                stored...)
+            stored_ensemble = EnsembleProblem(remake(jump_prob; prob = stored_prob))
+            @test_throws ArgumentError solve(stored_ensemble, alg,
+                EnsembleGPUKernel(backend); trajectories = 16, kwargs...)
+        end
+        stored_prob = DiscreteProblem(wrapped.f, wrapped.u0, wrapped.tspan, wrapped.p;
+            alias_jump = true)
+        @test_throws "`alias_jump` keyword argument was removed" solve(
+            EnsembleProblem(remake(jump_prob; prob = stored_prob)), alg,
+            EnsembleGPUKernel(backend); trajectories = 16, kwargs...)
+
         if backend isa CPU
             sol = solve(ensemble_prob, alg, EnsembleGPUKernel(backend);
                 trajectories = 16, kwargs..., alias = nothing)
             @test all(SciMLBase.successful_retcode, sol.u)
+        end
+
+        # Kernels never expose an integrator, so keeping the pre-step state is rejected
+        # with multiple trajectories; a single trajectory uses the serial solver.
+        if alg isa SSAStepper
+            @test_throws "save_uprev" solve(ensemble_prob, SSAStepper(; save_uprev = true),
+                EnsembleGPUKernel(backend); trajectories = 16, kwargs...)
+            single_sol = solve(ensemble_prob, SSAStepper(; save_uprev = true),
+                EnsembleGPUKernel(backend); trajectories = 1, seed = 123, kwargs...,
+                alias = false)
+            @test all(SciMLBase.successful_retcode, single_sol.u)
         end
 
         # A single trajectory delegates to the serial solver, whose rules apply:

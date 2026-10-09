@@ -158,3 +158,32 @@ end
         @test draws == (3, 3)
     end
 end
+
+# A callback that changes the state at the end time must not affect the pending `saveat`
+# times before it, and the saved times must stay sorted: `solve!` saves those times
+# before its final callback pass.
+@testset "End-time callback after pending saveat times" begin
+    no_jumps = ConstantRateJump((u, p, t) -> 0.0,
+        integrator -> (integrator.u[1] += 1; nothing))
+    ts = [0.0, 0.5, 0.75, 1.0]
+    @testset "jump save_positions=$jump_saves, callback save_positions=$cb_saves" for jump_saves in (
+            (false, false), (true, true)),
+        cb_saves in ((true, true), (false, false))
+
+        set_to_ten = DiscreteCallback((u, t, integrator) -> t == 1.0,
+            integrator -> (integrator.u[1] = 10; nothing); save_positions = cb_saves)
+        jprob = JumpProblem(DiscreteProblem([0], (0.0, 1.0)), Direct(), no_jumps;
+            save_positions = jump_saves)
+        sol = solve(jprob, SSAStepper(); saveat = ts, callback = set_to_ten, seed = 1)
+        @test issorted(sol.t)
+        # Every requested time is saved, with the state before the callback at the
+        # earlier times and after it at the end time.
+        @test [first(sol.u[findfirst(==(t), sol.t)]) for t in ts[1:3]] == [0, 0, 0]
+        @test sol.t[end] == 1.0
+        @test sol(0.75) == [0]
+        # A callback that saves after its effect records the new state at the end time.
+        # One that does not save may leave the earlier end-time save as the last entry,
+        # as OrdinaryDiffEq does for callbacks with `save_positions = (false, false)`.
+        cb_saves[2] && @test sol.u[end] == [10]
+    end
+end

@@ -190,10 +190,34 @@ of `u[1]`, giving
 
 When using an ODE or SDE time-stepper that conforms to the [integrator
 interface](https://docs.sciml.ai/DiffEqDocs/stable/basics/integrator/), one
-can simply use `integrator.uprev`. For efficiency reasons, the pure jump
-[`SSAStepper`](@ref) integrator does not have such a field. If one needs
-solution components at earlier times, one can save them within the callback
-condition by making a functor:
+can simply use `integrator.uprev`. The pure jump [`SSAStepper`](@ref) provides
+the same field when the problem is solved with `SSAStepper(; save_uprev = true)`:
+`integrator.uprev` then holds the state at the start of the current step, at
+time `integrator.tprev`, and the integrator can be evaluated anywhere in
+`[integrator.tprev, integrator.t]`. For example, to remove one unit of `u[4]`
+whenever `u[2]` decreases:
+
+```julia
+condition(u, t, integrator) = u[2] < integrator.uprev[2]
+function affect!(integrator)
+    integrator.u[4] -= 1
+    reset_aggregated_jumps!(integrator)
+    nothing
+end
+sol = solve(jprob, SSAStepper(; save_uprev = true);
+    callback = DiscreteCallback(condition, affect!))
+```
+
+The option also enables `get_tmp_cache`, which callbacks that evaluate the
+integrator in place need, such as a `SavingCallback` or `FunctionCallingCallback`
+with save times for a vector state. Keeping `uprev` copies the state on every
+step, so `SSAStepper()` does not; see [Saving with callbacks and evaluating the
+integrator](@ref ssa_integrator_evaluation) for the trade-offs, and for the
+alternative of passing the save times as `tstops`, which needs neither.
+
+If only a few components are needed, storing them in the callback avoids copying
+the whole state on every step. For example, a functor can record the previous
+value of `u[2]`:
 
 ```julia
 # stores the previous value of u[2] and represents the callback functions
@@ -216,9 +240,20 @@ end
 # affect!
 function (upc::UprevCondition)(integrator)
     integrator.u[4] -= 1
+    reset_aggregated_jumps!(integrator)
     nothing
 end
 
 upc = UprevCondition(u0[2])
 cb = DiscreteCallback(upc, upc)
 ```
+
+## Which state types can I use with `SSAStepper`?
+
+`SSAStepper` fully supports a `Vector` or an `SVector` of integers or floats, and,
+for spatial problems, a species × sites `Matrix{Int}`, which `NSM` and
+`DirectCRDirect` keep and other aggregators flatten into a `Vector`. Models without `MassActionJump`s can also use an integer or float
+scalar state, with every non-spatial aggregator except `RSSA` and `RSSACR`.
+Bounded `VariableRateJump`s require `Coevolve`. Other state types, such as nested
+arrays, are not supported, even when a model built from user-written jumps appears
+to work. See [Supported state types](@ref ssa_state_types) for details.

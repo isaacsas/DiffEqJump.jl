@@ -689,6 +689,101 @@ the jump whenever `save_positions = (true, true)`. All other saving behavior is
 delegated to the integrator and controlled via keyword arguments to `solve` such
 as `saveat`.
 
+## [Saving with callbacks and evaluating the integrator](@id ssa_integrator_evaluation)
+
+`saveat` saves the full state exactly at the requested times. To save something
+else at a set of times, for example a function of the state, a `SavingCallback`
+from DiffEqCallbacks.jl can be used. Such callbacks run at the end of each step
+and evaluate the integrator, `integrator(t)`, at the save times that fall within
+the step. With `SSAStepper` the sampled path is piecewise constant, and jumps and
+callbacks only change the state at the end of a step, so the state at a save time
+before the current time is the state at the start of the step. `SSAStepper` keeps
+that state only when asked to.
+
+We use the SIR model from above, defined with `ConstantRateJump`s, and turn off
+saving at every jump since only the callback saves:
+
+```@example ssa_eval
+using JumpProcesses, DiffEqCallbacks
+p = (0.1 / 1000.0, 0.01)  # (β, ν)
+rate1(u, p, t) = p[1] * u[1] * u[2]  # β*S*I
+function affect1!(integrator)
+    integrator.u[1] -= 1
+    integrator.u[2] += 1
+    nothing
+end
+rate2(u, p, t) = p[2] * u[2]         # ν*I
+function affect2!(integrator)
+    integrator.u[2] -= 1
+    integrator.u[3] += 1
+    nothing
+end
+prob = DiscreteProblem([999, 10, 0], (0.0, 250.0), p)
+jump_prob = JumpProblem(prob, Direct(), ConstantRateJump(rate1, affect1!),
+    ConstantRateJump(rate2, affect2!); save_positions = (false, false))
+nothing # hide
+```
+
+We save the number of people who have ever been infected, `I(t) + R(t)`, every
+25 days. Solving with `SSAStepper(; save_uprev = true)` makes the integrator keep
+the state at the start of each step in `integrator.uprev`, so it can be evaluated
+anywhere in the current step, `[integrator.tprev, integrator.t]`:
+
+```@example ssa_eval
+save_times = 0.0:25.0:250.0
+ever_infected(u, t, integrator) = u[2] + u[3]
+saved = SavedValues(Float64, Int)
+callback = SavingCallback(ever_infected, saved; saveat = save_times)
+solve(jump_prob, SSAStepper(; save_uprev = true); callback, seed = 1234)
+saved.saveval
+```
+
+The values agree exactly with those computed from `saveat` for the same seed:
+
+```@example ssa_eval
+full = solve(jump_prob, SSAStepper(); saveat = save_times, seed = 1234)
+saved.saveval == [u[2] + u[3] for u in full.u]
+```
+
+Keeping `uprev` copies the state on every step, a cost proportional to the size
+of the state that can dominate the per-step cost of the efficient aggregators on
+large or spatial systems. Alternatively, pass the save times as `tstops`, so that
+the integrator stops exactly at them and never needs an earlier state:
+
+```@example ssa_eval
+saved_at_stops = SavedValues(Float64, Int)
+callback = SavingCallback(ever_infected, saved_at_stops; saveat = save_times)
+solve(jump_prob, SSAStepper(); callback, tstops = save_times, seed = 1234)
+saved_at_stops.saveval == saved.saveval
+```
+
+This avoids the per-step copy, but adds a stop and a pass through the callbacks at
+each save time. When every jump is saved, each stop also adds a saved state, so
+pair it with `save_positions = (false, false)`.
+
+Without either, `SSAStepper()` can only be evaluated at the current time, so the
+`SavingCallback` raises an `ArgumentError` at the first save time that falls
+before the end of a step:
+
+```julia
+solve(jump_prob, SSAStepper(); callback)  # ArgumentError
+```
+
+In summary:
+
+  - To save the full state at given times, use `saveat`, which is exact and cheapest.
+  - To save functions of the state at given times, pass those times as `tstops`
+    as well, or use `SSAStepper(; save_uprev = true)`.
+  - For callbacks that need the state at the start of the step, `integrator.uprev`,
+    or that evaluate the integrator at times within a step, use
+    `SSAStepper(; save_uprev = true)`. It also provides `get_tmp_cache`, which
+    callbacks that evaluate the integrator in place use.
+
+`save_uprev` works with every [supported state type](@ref ssa_state_types),
+including scalar states. DiffEqCallbacks' integrating callbacks
+(`IntegratingCallback`, `IntegratingSumCallback`) are not yet supported with
+`SSAStepper`.
+
 ## Defining the Jumps Directly: Mixing `ConstantRateJump`/`VariableRateJump` and `MassActionJump`
 
 Suppose we now want to add in to the original SIR model another jump that
