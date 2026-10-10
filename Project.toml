@@ -27,11 +27,13 @@ Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
 OrdinaryDiffEqCore = "bbf590c4-e513-4bbe-9b18-05decba2e5d8"
+StochasticDiffEqCore = "19c5a474-6cd1-4a5f-be79-46dc34e54d7f"
 
 [extensions]
 JumpProcessesForwardDiffExt = "ForwardDiff"
 JumpProcessesKernelAbstractionsExt = ["Adapt", "KernelAbstractions"]
 JumpProcessesOrdinaryDiffEqCoreExt = "OrdinaryDiffEqCore"
+JumpProcessesStochasticDiffEqCoreExt = ["OrdinaryDiffEqCore", "StochasticDiffEqCore"]
 
 [compat]
 ADTypes = "1.22.0"
@@ -64,14 +66,10 @@ StableRNGs = "1"
 StaticArrays = "1.9.18"
 Statistics = "1"
 StochasticDiffEq = "7.0.0, 7"
-StochasticDiffEqCore = "2.2.4"
+StochasticDiffEqCore = "2.2.1"
 SymbolicIndexingInterface = "0.3.48"
 Test = "1"
 julia = "1.10"
-
-[sources]
-# Temporary until OrdinaryDiffEq.jl#4614 is merged and released.
-StochasticDiffEqCore = {url = "https://github.com/isaacsas/OrdinaryDiffEq.jl.git", rev = "77c07bffe2a225a95436190570eb8795f69342d0", subdir = "lib/StochasticDiffEqCore"}
 
 [extras]
 Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"

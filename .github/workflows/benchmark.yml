@@ -16,8 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Restore lts when the full version matrix is enabled again.
-        version: ["1"]
+        version: ["1", "lts"]
     env:
       # Force consistent Julia depot path for self-hosted runners
       JULIA_DEPOT_PATH: ~/.julia

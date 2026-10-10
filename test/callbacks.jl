@@ -1,4 +1,4 @@
-using JumpProcesses, OrdinaryDiffEq, SciMLBase, Test
+using JumpProcesses, OrdinaryDiffEq, SciMLBase, DiffEqBase, Test
 using StableRNGs
 rng = StableRNG(12345)
 
@@ -514,4 +514,87 @@ end
     # VariableRateJumps produce continuous callbacks
     n_continuous = length(integrator_vr.opts.callback.continuous_callbacks)
     @test n_continuous == 1
+end
+
+# Callbacks can be stored on the wrapped problem, stored on the `JumpProblem`, or passed
+# at the call site. `init` must combine them exactly as `solve` does: DiffEqBase's
+# `init_call` merges the `JumpProblem`'s stored keywords once (honoring
+# `merge_callbacks`). On the `__jump_init` paths (ODE and `FunctionMap`), the wrapped
+# problem's own stored keywords are merged once by its inner `init`; `SSAStepper` and
+# the StochasticDiffEqCore backend do not merge callbacks stored on the wrapped problem.
+@testset "Stored and call-level callbacks: init matches solve" begin
+    using OrdinaryDiffEqFunctionMap, StochasticDiffEq
+    log = Symbol[]
+    logging_callback(name) = DiscreteCallback((u, t, integrator) -> true,
+        integrator -> (push!(log, name); nothing); save_positions = (false, false))
+    jump = ConstantRateJump((u, p, t) -> 1.0, integrator -> (integrator.u[1] += 1; nothing))
+    noop!(du, u, p, t) = (du .= 0; nothing)
+    noop_rode!(du, u, p, t, W) = (du .= 0; nothing)
+    wrapped = logging_callback(:wrapped)
+    ode = ODEProblem(noop!, [0.0], (0.0, 0.8); callback = wrapped)
+    discrete = DiscreteProblem([0], (0.0, 8.0); callback = wrapped)
+    sde = SDEProblem(noop!, noop!, [0.0], (0.0, 0.8); callback = wrapped)
+    rode = RODEProblem(noop_rode!, [0.0], (0.0, 0.8); callback = wrapped)
+    cases = (("ODE", ode, Tsit5(), (; adaptive = false, dt = 0.1)),
+        ("FunctionMap", discrete, FunctionMap(), (;)),
+        ("SSAStepper", discrete, SSAStepper(), (;)),
+        ("SDE", sde, EM(), (; dt = 0.1)),
+        ("RODE", rode, RandomEM(), (; dt = 0.1)))
+
+    function run_and_log(entry, jprob, alg; kwargs...)
+        empty!(log)
+        if entry === :solve
+            solve(jprob, alg; kwargs...)
+        else
+            solve!(init(jprob, alg; kwargs...))
+        end
+        copy(log)
+    end
+
+    @testset "$name, merge_callbacks = $merge_callbacks" for (name, prob, alg, options) in cases,
+        merge_callbacks in (true, false)
+
+        jprob = JumpProblem(prob, Direct(), jump; callback = logging_callback(:jumpproblem))
+        call = logging_callback(:call)
+        kwargs = (; options..., callback = call, merge_callbacks, seed = 1)
+        solved = run_and_log(:solve, jprob, alg; kwargs...)
+        initialized = run_and_log(:init, jprob, alg; kwargs...)
+        # Same callbacks, same number of runs, same order.
+        @test initialized == solved
+        steps = count(==(:call), solved)
+        @test steps > 0
+        @test count(==(:jumpproblem), initialized) == (merge_callbacks ? steps : 0)
+        if name in ("ODE", "FunctionMap")
+            # The wrapped problem's callback is merged once by its inner `init`, whatever
+            # `merge_callbacks` says about the `JumpProblem`'s stored callback.
+            @test count(==(:wrapped), initialized) == steps
+        end
+    end
+
+    @testset "Direct __init discards merge_callbacks" begin
+        prob = ODEProblem(noop!, [0.0], (0.0, 0.8); callback = logging_callback(:wrapped))
+        jprob = JumpProblem(prob, Direct(), jump; callback = logging_callback(:jumpproblem))
+        options = (; adaptive = false, dt = 0.1, seed = 1)
+        expected = run_and_log(:init, jprob, Tsit5(); options...,
+            callback = logging_callback(:call))
+        # `__init` receives keywords that are already merged; a stray `merge_callbacks`
+        # must neither merge again nor reach the wrapped problem's `init`.
+        merged = DiffEqBase.merge_problem_kwargs(jprob; callback = logging_callback(:call))
+        empty!(log)
+        solve!(SciMLBase.__init(jprob, Tsit5(); options..., merged...,
+            merge_callbacks = false))
+        @test log == expected
+    end
+
+    @testset "Stored tstops are honored once" begin
+        prob = ODEProblem(noop!, [0.0], (0.0, 1.0))
+        jprob = JumpProblem(prob, Direct(), jump; tstops = [0.55])
+        for sol in (solve(jprob, Tsit5(); seed = 1),
+            solve!(init(jprob, Tsit5(); seed = 1)))
+            @test count(==(0.55), sol.t) >= 1
+        end
+        integrator = init(jprob, Tsit5(); seed = 1)
+        solve!(integrator)
+        @test integrator.sol.t == solve(jprob, Tsit5(); seed = 1).t
+    end
 end

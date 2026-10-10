@@ -57,12 +57,14 @@ function SciMLBase.__solve(jump_prob::JumpProblem; kwargs...)
     error("Auto-solver selection is currently only implemented for JumpProblems defined over DiscreteProblems. Please explicitly specify a solver algorithm in calling solve.")
 end
 
+# Public `init` reaches `__init` through DiffEqBase's `init_call`, which has already merged
+# the problem's stored keywords (honoring `merge_callbacks`), so they are not merged again
+# here. `merge_callbacks` is accepted and discarded so that it is not forwarded to the
+# wrapped problem's `init`, whose own stored keywords are merged there exactly once, as on
+# the `solve` path.
 function SciMLBase.__init(_jump_prob::JumpProblem{IIP, P},
         alg::SciMLBase.AbstractDEAlgorithm; merge_callbacks = true, kwargs...) where {
         IIP, P}
-    # Merge jump_prob.kwargs with passed kwargs
-    kwargs = DiffEqBase.merge_problem_kwargs(_jump_prob; merge_callbacks, kwargs...)
-
     __jump_init(_jump_prob, alg; kwargs...)
 end
 

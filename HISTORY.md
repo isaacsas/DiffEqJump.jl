@@ -87,6 +87,16 @@ changes are not intended for a 9.x release.
     final callback pass. A callback that changed the state at the end time altered the
     values saved at those earlier times, and the saved times came out of order. They
     are now saved before the final callback pass.
+  - Fixed `init` on ODE, DAE, and `FunctionMap` integrators for `JumpProblem`s:
+    callbacks stored in the `JumpProblem` (`JumpProblem(...; callback)`) were merged
+    twice, so they ran twice per step, and were reintroduced even with
+    `merge_callbacks = false`. `init` now combines stored, wrapped-problem, and
+    call-level callbacks exactly as `solve` does.
+  - StochasticDiffEqCore is now a weak dependency: when it is installed, version
+    2.2.1 or later is required. A new extension sends stochastic `init` of a
+    `JumpProblem` to StochasticDiffEqCore's own initializer on every supported version,
+    so `init` followed by `solve!` matches `solve`. StochasticDiffEqCore versions with
+    their own per-algorithm `JumpProblem` initializers take precedence automatically.
   - The state types `SSAStepper` supports are now documented: vectors and
     `SVector`s of integers or floats, species × sites matrices for spatial
     problems, and scalars for models without mass-action jumps. See "Supported

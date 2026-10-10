@@ -22,9 +22,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Restore lts/pre after the temporary Core source pin is removed.
         version:
+          - "lts"
           - "1"
+          - "pre"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

@@ -296,7 +296,7 @@ backends.
 |:----------------------------------------------------- |:-------------------------------------------------------------------- |:------------------------------------------------------------- |:------------------- |
 | `SSAStepper`                                          | JumpProcesses (`solve.jl`)                                           | JumpProcesses (`SSA_stepper.jl`)                              | No                  |
 | OrdinaryDiffEq ODE/DAE (e.g., `Tsit5`, `DFBDF`)       | JumpProcesses (`solve.jl`)                                           | JumpProcesses' OrdinaryDiffEqCore extension → OrdinaryDiffEq  | Yes                 |
-| StochasticDiffEq SDE/RODE (e.g., `SRIW1`, `RandomEM`) | StochasticDiffEqCore                                                 | StochasticDiffEqCore's JumpProblem initializer                | No                  |
+| StochasticDiffEq SDE/RODE (e.g., `SRIW1`, `RandomEM`) | StochasticDiffEqCore                                                 | StochasticDiffEqCore's JumpProblem initializer (see below)    | No                  |
 | StochasticDiffEq jump algorithms (e.g., `TauLeaping`) | StochasticDiffEqCore                                                 | StochasticDiffEqCore's specialized jump-algorithm initializer | No                  |
 | All five CPU tau-leaping algorithms                   | JumpProcesses (`simple_regular_solve.jl`, custom `DiffEqBase.solve`) | N/A                                                           | No                  |
 
@@ -307,11 +307,27 @@ For **OrdinaryDiffEq ODE/DAE solvers**, `rng` is resolved via `resolve_rng` in `
 (`solve.jl`) and forwarded to OrdinaryDiffEq's `init`, which stores it on the
 `ODEIntegrator`.
 
-For **StochasticDiffEq SDE/RODE solvers**, the backend's more specific `__solve`
-and `__init` methods handle the original JumpProblem and unchanged RNG/seed
-inputs. Both routes use the backend's JumpProblem initializer, including its RNG
-policy, jump-state copying, and callback setup. DiffEqBase merges stored problem
-keywords and user callbacks before dispatching `init`.
+For **StochasticDiffEq SDE/RODE solvers**, both `solve` and `init` reach the
+backend's JumpProblem initializer, StochasticDiffEqCore's `_sde_init`, with the
+original JumpProblem and unchanged RNG/seed inputs, so they share its RNG policy,
+jump-state copying, and callback setup. `solve` goes through the backend's more
+specific `__solve`. For `init`, StochasticDiffEqCore versions with per-algorithm
+`__init(::JumpProblem, ...)` methods own dispatch directly; on other versions,
+JumpProcesses' `JumpProcessesStochasticDiffEqCoreExt` extension adds one
+`__init(::JumpProblem, ::Union{StochasticDiffEqAlgorithm, StochasticDiffEqRODEAlgorithm})`
+method that forwards to `_sde_init`, resolving an otherwise ambiguous dispatch. The
+backend's per-algorithm methods are more specific and take precedence wherever they
+exist, as does its method for jump algorithms such as `TauLeaping`.
+
+DiffEqBase's `init_call` merges the JumpProblem's stored keywords and user callbacks
+once, before dispatching to `__init`; JumpProcesses' `__init` methods do not merge
+them again, and discard `merge_callbacks`. The `solve` path merges once in `__solve`.
+Keywords stored on the wrapped problem depend on the pathway. On the `__jump_init`
+pathways (OrdinaryDiffEq ODE/DAE solvers and `FunctionMap`), the wrapped problem's
+own `init` merges them, callbacks included, exactly once, whatever `merge_callbacks`
+is. `SSAStepper` and StochasticDiffEqCore's `_sde_init` do not merge callbacks
+stored on the wrapped problem; on these pathways, store callbacks on the
+`JumpProblem` or pass them to `solve`/`init`.
 
 Jump-state copying on these pathways follows the backend's alias specifier; see
 [Jump state ownership and problem reuse](@ref jump_state_ownership). In contrast,

@@ -1,7 +1,7 @@
 # Tests for JumpProblem remake with VariableRateJumps (ExtendedJumpArray case)
 # This tests the fix for symbolic u0 with ExtendedJumpArray
 
-using JumpProcesses, OrdinaryDiffEq, Test, SymbolicIndexingInterface
+using JumpProcesses, OrdinaryDiffEq, SciMLBase, Test, SymbolicIndexingInterface
 using StableRNGs
 
 @testset "remake JumpProblem with VariableRateJumps (ExtendedJumpArray)" begin

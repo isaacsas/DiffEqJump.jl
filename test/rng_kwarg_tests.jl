@@ -1,4 +1,4 @@
-using JumpProcesses, OrdinaryDiffEq, StochasticDiffEq, Test
+using JumpProcesses, OrdinaryDiffEq, StochasticDiffEq, SciMLBase, Test
 using StableRNGs, Random
 
 # ==========================================================================
