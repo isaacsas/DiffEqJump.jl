@@ -278,6 +278,21 @@ and the internals will automatically build the `JumpSet`. `save_positions`
 determines whether to save the state of the system just before and/or after
 jumps occur.
 
+Callbacks to run in every solve can be passed to the constructor with the
+`callback` keyword, `JumpProblem(prob, aggregator, jumps...; callback)`, and
+further callbacks can be passed to `solve` or `init`.
+
+!!! warning "Callbacks on the wrapped problem are not supported"
+
+    Do not store callbacks on `prob` itself, for example with
+    `ODEProblem(f, u0, tspan, p; callback)` or `DiscreteProblem(u0, tspan, p; callback)`.
+    The `JumpProblem` constructor raises an `ArgumentError` if `prob` stores a
+    `callback`. Before JumpProcesses 10, OrdinaryDiffEq solvers (including
+    `FunctionMap`) ran such callbacks, while `SSAStepper` and StochasticDiffEq solvers
+    silently ignored them. Pass the callbacks to the `JumpProblem` constructor or to
+    `solve`/`init` instead, and use `remake(prob; callback = nothing)` to remove them
+    from an existing problem.
+
 Note that a `JumpProblem`/`JumpSet` can only have 1 `RegularJump` (since a
 `RegularJump` itself describes multiple processes together). Similarly, it can
 only have one `MassActionJump` (since it also describes multiple processes

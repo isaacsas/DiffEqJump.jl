@@ -65,6 +65,18 @@ $(FIELDS)
     default is `VR_FRM`.
   - `tstops`, time stops to pass through to the solver. Can be an `AbstractVector` of times
     or a callable `(p, tspan) -> times`.
+  - `callback`, callbacks to run in every solve of the problem. They are combined with any
+    `callback` passed to `solve` or `init`, which replaces them instead when
+    `merge_callbacks = false` is also passed. Do not store callbacks on the wrapped problem
+    `prob`; see the warning below.
+
+!!! warning "Callbacks on the wrapped problem are not supported"
+
+    Pass callbacks to the `JumpProblem` constructor, with the `callback` keyword, or to
+    `solve`/`init`. Do not store them on the wrapped problem, for example with
+    `ODEProblem(f, u0, tspan, p; callback)`: the constructor raises an `ArgumentError` if
+    `prob` stores a `callback`, since only some solvers would run it. Use
+    `remake(prob; callback = nothing)` to remove callbacks from an existing problem.
 
 Please see the [tutorial
 page](https://docs.sciml.ai/JumpProcesses/stable/tutorials/discrete_stochastic_example/) in
@@ -141,8 +153,35 @@ mutable struct JumpProblem{iip, P, A, C, J <: Union{Nothing, AbstractJumpAggrega
     """
     kwargs::K
 end
+
+# Callbacks stored on the wrapped problem would run only on solvers that `init` the wrapped
+# problem (OrdinaryDiffEq, including `FunctionMap`); `SSAStepper` and StochasticDiffEq never
+# read them. Reject them, so that every solver runs the same callbacks.
+function check_no_wrapped_callbacks(prob)
+    if hasproperty(prob, :kwargs) && haskey(prob.kwargs, :callback) &&
+       !is_empty_callback(prob.kwargs[:callback])
+        throw(ArgumentError("""
+            Callbacks stored on the problem wrapped by a `JumpProblem` are not supported, \
+            but the wrapped `$(nameof(typeof(prob)))` stores a `callback` keyword argument. \
+            OrdinaryDiffEq solvers would run these callbacks, while `SSAStepper` and \
+            StochasticDiffEq solvers would ignore them. Pass the callbacks to the \
+            `JumpProblem` constructor instead, `JumpProblem(prob, aggregator, jumps...; \
+            callback)`, or to `solve`/`init`. To remove callbacks from an existing problem, \
+            use `remake(prob; callback = nothing)`."""))
+    end
+    nothing
+end
+
+is_empty_callback(::Nothing) = true
+function is_empty_callback(cb::CallbackSet)
+    isempty(cb.continuous_callbacks) && isempty(cb.discrete_callbacks)
+end
+is_empty_callback(_) = false
+
+# Also used by `remake`, so a new wrapped problem is checked too.
 function JumpProblem(p::P, a::A, dj::J, jc::C, cj::J1, vj::J2, rj::J3, mj::J4,
         kwargs::K) where {P, A, J, C, J1, J2, J3, J4, K}
+    check_no_wrapped_callbacks(p)
     iip = isinplace_jump(p, rj)
     JumpProblem{iip, P, A, C, J, J1, J2, J3, J4, K}(p, a, dj, jc, cj, vj, rj, mj,
         kwargs)
@@ -165,6 +204,9 @@ Base.@pure remaker_of(prob::T) where {T <: JumpProblem} = SciMLBase.parameterles
 
 Construct a `JumpProblem` with a new initial condition `u0`, parameters `p`, time span
 `tspan`, or wrapped problem `prob`.
+
+A new wrapped problem `prob` must not store callbacks, as for the `JumpProblem`
+constructor; an `ArgumentError` is raised if it does.
 
 The new problem shares the original's jump aggregator and jump callbacks rather than
 copying them. Solvers owned by JumpProcesses re-initialize this state from the problem being
@@ -301,6 +343,8 @@ function JumpProblem(prob, aggregator::AbstractAggregatorAlgorithm, jumps::JumpS
         throw(ArgumentError("`useiszero` is no longer a keyword argument for `JumpProblem`. Set `useiszero` on the `MassActionJump` directly instead."))
     end
     haskey(kwargs, :alias_jump) && throw(ArgumentError(ALIAS_JUMP_REMOVED_MSG))
+    # Check before spatial flattening, which rebuilds the problem without its keywords.
+    check_no_wrapped_callbacks(prob)
 
     # keep the original MAJ (including {Nothing} parameterized MAJs);
     # fill_scaled_rates! in each aggregator's initialize! handles rate setup
@@ -381,6 +425,7 @@ function JumpProblem(prob, aggregator::PureLeaping, jumps::JumpSet;
         throw(ArgumentError("`useiszero` is no longer a keyword argument for `JumpProblem`. Set `useiszero` on the `MassActionJump` directly instead."))
     end
     haskey(kwargs, :alias_jump) && throw(ArgumentError(ALIAS_JUMP_REMOVED_MSG))
+    check_no_wrapped_callbacks(prob)
 
     # Validate no spatial systems (not currently supported)
     (spatial_system !== nothing || hopping_constants !== nothing) &&

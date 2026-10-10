@@ -322,12 +322,11 @@ exist, as does its method for jump algorithms such as `TauLeaping`.
 DiffEqBase's `init_call` merges the JumpProblem's stored keywords and user callbacks
 once, before dispatching to `__init`; JumpProcesses' `__init` methods do not merge
 them again, and discard `merge_callbacks`. The `solve` path merges once in `__solve`.
-Keywords stored on the wrapped problem depend on the pathway. On the `__jump_init`
-pathways (OrdinaryDiffEq ODE/DAE solvers and `FunctionMap`), the wrapped problem's
-own `init` merges them, callbacks included, exactly once, whatever `merge_callbacks`
-is. `SSAStepper` and StochasticDiffEqCore's `_sde_init` do not merge callbacks
-stored on the wrapped problem; on these pathways, store callbacks on the
-`JumpProblem` or pass them to `solve`/`init`.
+Only the `__jump_init` pathways (OrdinaryDiffEq ODE/DAE solvers and `FunctionMap`)
+read keywords stored on the wrapped problem, through its own `init`; `SSAStepper` and
+StochasticDiffEqCore's `_sde_init` never do. So that every solver runs the same
+callbacks, the `JumpProblem` constructor, and `remake` with a new wrapped problem,
+reject a wrapped problem that stores a `callback`.
 
 Jump-state copying on these pathways follows the backend's alias specifier; see
 [Jump state ownership and problem reuse](@ref jump_state_ownership). In contrast,

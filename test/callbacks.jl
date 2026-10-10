@@ -516,12 +516,10 @@ end
     @test n_continuous == 1
 end
 
-# Callbacks can be stored on the wrapped problem, stored on the `JumpProblem`, or passed
-# at the call site. `init` must combine them exactly as `solve` does: DiffEqBase's
-# `init_call` merges the `JumpProblem`'s stored keywords once (honoring
-# `merge_callbacks`). On the `__jump_init` paths (ODE and `FunctionMap`), the wrapped
-# problem's own stored keywords are merged once by its inner `init`; `SSAStepper` and
-# the StochasticDiffEqCore backend do not merge callbacks stored on the wrapped problem.
+# Callbacks can be stored on the `JumpProblem` or passed at the call site (callbacks
+# stored on the wrapped problem are rejected; see the next testset). `init` must combine
+# them exactly as `solve` does: DiffEqBase's `init_call` merges the `JumpProblem`'s stored
+# keywords once, honoring `merge_callbacks`.
 @testset "Stored and call-level callbacks: init matches solve" begin
     using OrdinaryDiffEqFunctionMap, StochasticDiffEq
     log = Symbol[]
@@ -530,11 +528,10 @@ end
     jump = ConstantRateJump((u, p, t) -> 1.0, integrator -> (integrator.u[1] += 1; nothing))
     noop!(du, u, p, t) = (du .= 0; nothing)
     noop_rode!(du, u, p, t, W) = (du .= 0; nothing)
-    wrapped = logging_callback(:wrapped)
-    ode = ODEProblem(noop!, [0.0], (0.0, 0.8); callback = wrapped)
-    discrete = DiscreteProblem([0], (0.0, 8.0); callback = wrapped)
-    sde = SDEProblem(noop!, noop!, [0.0], (0.0, 0.8); callback = wrapped)
-    rode = RODEProblem(noop_rode!, [0.0], (0.0, 0.8); callback = wrapped)
+    ode = ODEProblem(noop!, [0.0], (0.0, 0.8))
+    discrete = DiscreteProblem([0], (0.0, 8.0))
+    sde = SDEProblem(noop!, noop!, [0.0], (0.0, 0.8))
+    rode = RODEProblem(noop_rode!, [0.0], (0.0, 0.8))
     cases = (("ODE", ode, Tsit5(), (; adaptive = false, dt = 0.1)),
         ("FunctionMap", discrete, FunctionMap(), (;)),
         ("SSAStepper", discrete, SSAStepper(), (;)),
@@ -564,21 +561,16 @@ end
         steps = count(==(:call), solved)
         @test steps > 0
         @test count(==(:jumpproblem), initialized) == (merge_callbacks ? steps : 0)
-        if name in ("ODE", "FunctionMap")
-            # The wrapped problem's callback is merged once by its inner `init`, whatever
-            # `merge_callbacks` says about the `JumpProblem`'s stored callback.
-            @test count(==(:wrapped), initialized) == steps
-        end
     end
 
     @testset "Direct __init discards merge_callbacks" begin
-        prob = ODEProblem(noop!, [0.0], (0.0, 0.8); callback = logging_callback(:wrapped))
+        prob = ODEProblem(noop!, [0.0], (0.0, 0.8))
         jprob = JumpProblem(prob, Direct(), jump; callback = logging_callback(:jumpproblem))
         options = (; adaptive = false, dt = 0.1, seed = 1)
         expected = run_and_log(:init, jprob, Tsit5(); options...,
             callback = logging_callback(:call))
         # `__init` receives keywords that are already merged; a stray `merge_callbacks`
-        # must neither merge again nor reach the wrapped problem's `init`.
+        # must not merge them again.
         merged = DiffEqBase.merge_problem_kwargs(jprob; callback = logging_callback(:call))
         empty!(log)
         solve!(SciMLBase.__init(jprob, Tsit5(); options..., merged...,
@@ -596,5 +588,100 @@ end
         integrator = init(jprob, Tsit5(); seed = 1)
         solve!(integrator)
         @test integrator.sol.t == solve(jprob, Tsit5(); seed = 1).t
+    end
+end
+
+# Callbacks stored on the wrapped problem would run only on solvers that `init` the
+# wrapped problem (OrdinaryDiffEq), and be ignored by `SSAStepper` and StochasticDiffEq, so
+# the `JumpProblem` constructors and `remake` reject them.
+@testset "Callbacks stored on the wrapped problem are rejected" begin
+    using StochasticDiffEq
+    function rejects_wrapped_callbacks(f)
+        err = try
+            f()
+            nothing
+        catch e
+            e
+        end
+        err isa ArgumentError && occursin("are not supported", err.msg)
+    end
+    discrete_cb = DiscreteCallback((u, t, integrator) -> false, integrator -> nothing)
+    continuous_cb = ContinuousCallback((u, t, integrator) -> t - 0.5, integrator -> nothing)
+    stored_callbacks = (discrete_cb, continuous_cb, CallbackSet(discrete_cb))
+    crj = ConstantRateJump((u, p, t) -> 1.0, integrator -> (integrator.u[1] += 1; nothing))
+    vrj = VariableRateJump((u, p, t) -> 1.0, integrator -> (integrator.u[1] += 1; nothing))
+    maj = MassActionJump([1.0], [[1 => 1]], [[1 => -1]])
+    rj = RegularJump((out, u, p, t) -> (out[1] = 1.0),
+        (du, u, p, t, counts, mark) -> (du[1] = counts[1]), 1)
+    noop!(du, u, p, t) = (du .= 0; nothing)
+    noop_rode!(du, u, p, t, W) = (du .= 0; nothing)
+    tspan = (0.0, 1.0)
+    discrete(kw) = DiscreteProblem([10], tspan; kw...)
+    leaping(kw) = DiscreteProblem([10.0], tspan; kw...)
+    spatial(kw) = DiscreteProblem([10 0], tspan; kw...)  # one species on two sites
+    ode(kw) = ODEProblem(noop!, [0.0], tspan; kw...)
+    sde(kw) = SDEProblem(noop!, noop!, [0.0], tspan; kw...)
+    rode(kw) = RODEProblem(noop_rode!, [0.0], tspan; kw...)
+    hopping_constants = fill(1.0, 1, 2)
+    spatial_options = (; hopping_constants, spatial_system = CartesianGrid((2,)))
+
+    # Each case wraps a problem through a different constructor path: its name, the
+    # wrapped-problem builder, and the remaining `JumpProblem` arguments and keywords.
+    cases = (("DiscreteProblem, Direct", discrete, (Direct(), crj), (;)),
+        ("DiscreteProblem, selected aggregator", discrete, (maj,), (;)),
+        ("DiscreteProblem, PureLeaping", leaping, (PureLeaping(), rj), (;)),
+        # Flattening rebuilds the problem without its keywords, so the check must precede it.
+        ("spatial DiscreteProblem, flattened", spatial, (Direct(), maj), spatial_options),
+        ("spatial DiscreteProblem, NSM", spatial, (NSM(), maj), spatial_options),
+        ("ODEProblem, Direct", ode, (Direct(), crj), (;)),
+        ("ODEProblem, VR_FRM", ode, (vrj,), (; vr_aggregator = VR_FRM())),
+        ("ODEProblem, VR_Direct", ode, (vrj,), (; vr_aggregator = VR_Direct())),
+        ("SDEProblem", sde, (Direct(), crj), (;)),
+        ("RODEProblem", rode, (Direct(), crj), (;)))
+
+    @testset "$name" for (name, problem, args, options) in cases
+        build(kw) = JumpProblem(problem(kw), args...; options...)
+        for callback in stored_callbacks
+            @test rejects_wrapped_callbacks(() -> build((; callback)))
+        end
+        # No stored callback, `nothing`, or an empty `CallbackSet` is accepted.
+        for kw in ((;), (; callback = nothing), (; callback = CallbackSet()))
+            @test build(kw) isa JumpProblem
+        end
+    end
+
+    @testset "The error names the wrapped problem type" begin
+        err = try
+            JumpProblem(ode((; callback = discrete_cb)), Direct(), crj)
+        catch e
+            e
+        end
+        @test err isa ArgumentError
+        @test occursin("wrapped `ODEProblem`", err.msg)
+        @test occursin("remake(prob; callback = nothing)", err.msg)
+    end
+
+    @testset "Accepted problems solve" begin
+        jprob = JumpProblem(discrete((; callback = CallbackSet())), Direct(), crj)
+        @test SciMLBase.successful_retcode(solve(jprob, SSAStepper(); seed = 1))
+        jprob = JumpProblem(ode((; callback = nothing)), Direct(), crj)
+        @test SciMLBase.successful_retcode(solve(jprob, Tsit5(); seed = 1))
+    end
+
+    @testset "remake(prob; callback = nothing) removes stored callbacks" begin
+        for problem in (discrete, ode, sde, rode)
+            prob = problem((; callback = discrete_cb))
+            @test rejects_wrapped_callbacks(() -> JumpProblem(prob, Direct(), crj))
+            stripped = remake(prob; callback = nothing)
+            @test JumpProblem(stripped, Direct(), crj) isa JumpProblem
+        end
+    end
+
+    @testset "remake checks a new wrapped problem" begin
+        jprob = JumpProblem(discrete((;)), Direct(), crj)
+        newprob = DiscreteProblem([5], tspan; callback = discrete_cb)
+        @test rejects_wrapped_callbacks(() -> remake(jprob; prob = newprob))
+        @test remake(jprob; prob = DiscreteProblem([5], tspan)).prob.u0 == [5]
+        @test remake(jprob; u0 = [5]).prob.u0 == [5]
     end
 end

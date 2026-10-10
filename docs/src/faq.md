@@ -147,6 +147,16 @@ Callbacks can be used with `ConstantRateJump`s, `MassActionJump`s, and
 discrete callbacks can be used (otherwise a different time stepper is needed).
 When using an ODE or SDE time stepper, any callback should work.
 
+Pass callbacks to `solve` or `init`, as in the example below, or to the
+`JumpProblem` constructor with its `callback` keyword.
+
+!!! warning "Callbacks on the wrapped problem are not supported"
+
+    Do not store callbacks on the problem a `JumpProblem` wraps, such as the
+    `DiscreteProblem` or `ODEProblem` passed to `JumpProblem`. The `JumpProblem`
+    constructor raises an `ArgumentError` if that problem stores a `callback`; see
+    [Defining a `JumpProblem`](@ref defining_jump_problem).
+
 *Note, when modifying `u` or `p` within a callback, you must call
 [`reset_aggregated_jumps!`](@ref) after making updates.* This ensures that the
 underlying jump simulation algorithms know to reinitialize their internal data

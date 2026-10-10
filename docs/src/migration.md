@@ -219,3 +219,25 @@ sol = solve(jprob, SSAStepper(); callback = cb, tstops = 0.0:1.0:10.0)
 [Saving with callbacks and evaluating the integrator](@ref ssa_integrator_evaluation)
 for when to choose each remedy, and [Supported state types](@ref ssa_state_types)
 for the state types `SSAStepper` supports.
+
+## Callbacks on the wrapped problem
+
+Callbacks stored on the problem a `JumpProblem` wraps were run by OrdinaryDiffEq
+solvers (including `FunctionMap`), but silently ignored by `SSAStepper` and
+StochasticDiffEq solvers. They are no longer supported: the `JumpProblem`
+constructor, and `remake` with a new wrapped problem, raise an `ArgumentError` if
+that problem stores a `callback`. Pass the callbacks to the `JumpProblem`
+constructor, or to `solve`/`init`, instead:
+
+```julia
+# Before (no longer works):
+oprob = ODEProblem(f, u0, tspan, p; callback = cb)
+jprob = JumpProblem(oprob, Direct(), jump)
+
+# After:
+oprob = ODEProblem(f, u0, tspan, p)
+jprob = JumpProblem(oprob, Direct(), jump; callback = cb)
+# or pass `callback = cb` to `solve`/`init`.
+```
+
+For an existing problem, `remake(oprob; callback = nothing)` removes its callbacks.

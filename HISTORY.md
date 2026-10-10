@@ -58,6 +58,22 @@ changes are not intended for a 9.x release.
     `SciMLBase.RODEAliasSpecifier` for RODEs) to copy jump state, or
     `alias_jumps = true` to reuse it. When unspecified, those solvers reuse jump
     state on thread 1 and copy it on other threads.
+  - **Breaking**: Callbacks stored on the problem wrapped by a `JumpProblem` are not
+    supported. The `JumpProblem` constructor, and `remake` with a new wrapped problem,
+    now raise an `ArgumentError` if that problem stores a `callback` (other than
+    `nothing` or an empty `CallbackSet`). Previously, OrdinaryDiffEq solvers
+    (including `FunctionMap`) ran such callbacks, while `SSAStepper` and
+    StochasticDiffEq SDE/RODE solvers silently ignored them. Pass callbacks to the
+    `JumpProblem` constructor or to `solve`/`init` instead:
+    ```julia
+    # Before (no longer works):
+    oprob = ODEProblem(f, u0, tspan, p; callback = cb)
+    jprob = JumpProblem(oprob, Direct(), jump)
+    # After:
+    oprob = ODEProblem(f, u0, tspan, p)
+    jprob = JumpProblem(oprob, Direct(), jump; callback = cb)
+    ```
+    `remake(prob; callback = nothing)` removes callbacks from an existing problem.
   - `SSAStepper` now supports the common `alias` keyword argument for its `u0`, `p`,
     and `tstops` inputs, given as a `Bool`, a `SciMLBase.DiscreteAliasSpecifier`, or
     an `ODEAliasSpecifier` (which also controls `tstops`). The defaults match
@@ -90,8 +106,8 @@ changes are not intended for a 9.x release.
   - Fixed `init` on ODE, DAE, and `FunctionMap` integrators for `JumpProblem`s:
     callbacks stored in the `JumpProblem` (`JumpProblem(...; callback)`) were merged
     twice, so they ran twice per step, and were reintroduced even with
-    `merge_callbacks = false`. `init` now combines stored, wrapped-problem, and
-    call-level callbacks exactly as `solve` does.
+    `merge_callbacks = false`. `init` now combines stored and call-level callbacks
+    exactly as `solve` does.
   - StochasticDiffEqCore is now a weak dependency: when it is installed, version
     2.2.1 or later is required. A new extension sends stochastic `init` of a
     `JumpProblem` to StochasticDiffEqCore's own initializer on every supported version,
