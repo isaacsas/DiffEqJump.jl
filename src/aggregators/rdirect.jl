@@ -18,7 +18,7 @@ mutable struct RDirectJumpAggregation{T, S, F1, F2, RNG, DEPGR} <:
     dep_gr::DEPGR
     max_rate::T
     counter::Int
-    counter_threshold::Any
+    counter_threshold::Int
 end
 
 function RDirectJumpAggregation(nj::Int, njt::T, et::T, crs::Vector{T}, sr::T, maj::S,
@@ -46,7 +46,7 @@ function RDirectJumpAggregation(nj::Int, njt::T, et::T, crs::Vector{T}, sr::T, m
         crs, sr, maj, rs,
         affs!, sps, rng,
         dg, max_rate, 0,
-        counter_threshold)
+        Int(counter_threshold))
 end
 
 ############################# Required Functions #############################
