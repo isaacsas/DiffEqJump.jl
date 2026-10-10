@@ -1061,12 +1061,20 @@ function massaction_jump_combine(maj1::Nothing, maj2::MassActionJump)
     setup_majump_to_merge(maj2.scaled_rates, maj2.reactant_stoch, maj2.net_stoch,
         maj2.param_mapper, maj2.rescale_rates_on_update)
 end
+function uses_custom_mapper(maj)
+    using_params(maj) && !(maj.param_mapper isa MassActionJumpParamMapper)
+end
+
 function massaction_jump_combine(maj1::MassActionJump, maj2::MassActionJump)
-    for m in (maj1, maj2)
-        (using_params(m) && !(m.param_mapper isa MassActionJumpParamMapper)) &&
-            error("Cannot merge MassActionJumps backed by custom parameter mappers. " *
-                  "Construct a single MassActionJump with all reactions instead.")
-    end
+    # Check the two jumps separately: looping over a tuple of differently typed jumps
+    # allocates on every merge.
+    (uses_custom_mapper(maj1) || uses_custom_mapper(maj2)) &&
+        error("Cannot merge MassActionJumps backed by custom parameter mappers. " *
+              "Construct a single MassActionJump with all reactions instead.")
+    (using_params(maj1) == using_params(maj2)) ||
+        error("Cannot merge a MassActionJump that has fixed rates with one that has a " *
+              "parameter mapping (`param_idxs` or `param_mapper`). Give every jump " *
+              "fixed rates, or every jump a parameter mapping.")
     (maj1.rescale_rates_on_update == maj2.rescale_rates_on_update) ||
         error("Cannot merge MassActionJumps with different rescale_rates_on_update settings.")
     majump_merge!(maj1, maj2.scaled_rates, maj2.reactant_stoch, maj2.net_stoch,

@@ -106,6 +106,78 @@ end
     end
 end
 
+# Scalar-form jumps hold one reaction without enclosing vectors.
+@testset "Scalar mass-action jumps merge in any order" begin
+    p = [2.0, 3.0, 5.0]
+    fixed_scalar1() = MassActionJump(2.0, [1 => 1], [1 => -1, 2 => 1])
+    fixed_scalar2() = MassActionJump(3.0, [2 => 2], [2 => -2, 3 => 1])  # scaled by 1/2!
+    fixed_vector() = MassActionJump([5.0], [[3 => 1]], [[3 => -1]])
+    param_scalar1() = MassActionJump([1 => 1], [1 => -1, 2 => 1]; param_idxs = 1)
+    param_scalar2() = MassActionJump([2 => 2], [2 => -2, 3 => 1]; param_idxs = 2)
+    param_vector() = MassActionJump([[3 => 1]], [[3 => -1]]; param_idxs = [3])
+    cases = (("fixed scalar, fixed scalar", (fixed_scalar1, fixed_scalar2), [2.0, 1.5]),
+        ("fixed scalar, fixed vector", (fixed_scalar1, fixed_vector), [2.0, 5.0]),
+        ("fixed vector, fixed scalar", (fixed_vector, fixed_scalar1), [5.0, 2.0]),
+        ("parameterized scalar, parameterized scalar", (param_scalar1, param_scalar2),
+            [2.0, 1.5]),
+        ("parameterized scalar, parameterized vector", (param_scalar1, param_vector),
+            [2.0, 5.0]),
+        ("parameterized vector, parameterized scalar", (param_vector, param_scalar1),
+            [5.0, 2.0]),
+        ("single fixed scalar", (fixed_scalar1,), [2.0]),
+        ("single parameterized scalar", (param_scalar1,), [2.0]))
+    dprob = DiscreteProblem([10, 10, 10], (0.0, 1.0), p)
+
+    # A jump's reactions as a vector, whether the jump is in scalar or collection form.
+    reactions(stoich) = eltype(stoich) <: Pair ? [stoich] : stoich
+
+    @testset "$name" for (name, builders, rates) in cases
+        jumps = map(build -> build(), builders)
+        fresh_jumps = map(build -> build(), builders)
+        # The merged jump lists each jump's reactions and parameter indices in order.
+        expected_rs = reduce(vcat, map(maj -> reactions(maj.reactant_stoch), fresh_jumps))
+        expected_ns = reduce(vcat, map(maj -> reactions(maj.net_stoch), fresh_jumps))
+        parameterized = first(fresh_jumps).param_mapper !== nothing
+        function check_merged(maj)
+            @test maj.reactant_stoch == expected_rs
+            @test maj.net_stoch == expected_ns
+            if parameterized
+                @test maj.param_mapper.param_idxs ==
+                      reduce(vcat, map(m -> m.param_mapper.param_idxs, fresh_jumps))
+            end
+            dest = zeros(JumpProcesses.get_num_majumps(maj))
+            JumpProcesses.fill_scaled_rates!(dest, maj, p)
+            @test dest == rates
+        end
+        for jset in (JumpSet(jumps...), JumpSet(; massaction_jumps = collect(jumps)))
+            check_merged(jset.massaction_jump)
+        end
+        jprob = JumpProblem(dprob, Direct(), jumps...)
+        check_merged(jprob.massaction_jump)
+        @test successful_retcode(solve(jprob, SSAStepper(); seed = 1))
+
+        # Merging leaves the user's jumps unchanged.
+        for (maj, fresh) in zip(jumps, fresh_jumps)
+            @test maj.reactant_stoch == fresh.reactant_stoch
+            @test maj.net_stoch == fresh.net_stoch
+            @test maj.scaled_rates == fresh.scaled_rates
+            if fresh.param_mapper !== nothing
+                @test maj.param_mapper.param_idxs == fresh.param_mapper.param_idxs
+            end
+        end
+    end
+
+    @testset "Mixing fixed-rate and parameterized jumps is diagnosed" begin
+        for builders in ((fixed_scalar1, param_scalar1), (param_scalar1, fixed_scalar1),
+            (fixed_vector, param_vector), (param_vector, fixed_vector))
+            jumps = map(build -> build(), builders)
+            @test_throws r"fixed rates with one that has a parameter mapping" JumpSet(jumps...)
+            @test_throws r"fixed rates with one that has a parameter mapping" JumpSet(;
+                massaction_jumps = collect(jumps))
+        end
+    end
+end
+
 @testset "Removed reset rate-refresh keyword is diagnosed" begin
     maj = MassActionJump([[1 => 1]], [[1 => -1]]; param_idxs = 1)
     jprob = JumpProblem(DiscreteProblem([5], (0.0, 1.0), [1.0]), Direct(), maj)
