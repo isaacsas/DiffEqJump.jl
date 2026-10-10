@@ -74,7 +74,7 @@ julia = "1.10"
 # (OrdinaryDiffEq.jl#4836), which removes the need for a JumpProcesses StochasticDiffEqCore
 # extension. Remove when it is released. Julia 1.10 ignores [sources]; see
 # test/test_groups.toml.
-StochasticDiffEqCore = {url = "https://github.com/isaacsas/OrdinaryDiffEq.jl.git", rev = "7a0294b8a8368f7b1fb17bf5ec4e56d80db4e8cf", subdir = "lib/StochasticDiffEqCore"}
+StochasticDiffEqCore = {url = "https://github.com/isaacsas/OrdinaryDiffEq.jl.git", rev = "sdecore/jumpprocesses-v10", subdir = "lib/StochasticDiffEqCore"}
 
 [extras]
 Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
