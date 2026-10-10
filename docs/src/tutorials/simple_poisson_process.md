@@ -318,20 +318,18 @@ are essentially defining a combined ODE-jump process, i.e., a [piecewise
 deterministic Markov
 process](https://en.wikipedia.org/wiki/Piecewise-deterministic_Markov_process),
 but one where the ODE is trivial and does not change the state. To use this
-problem type and the ODE solvers, we first load `OrdinaryDiffEq.jl` or
-`DifferentialEquations.jl`. If neither is installed, we first
+problem type we need an ODE solver; here we use `Tsit5` from the
+`OrdinaryDiffEqTsit5` package. If it is not installed, we first
 
 ```julia
 using Pkg
-Pkg.add("OrdinaryDiffEq")
-# or Pkg.add("DifferentialEquations")
+Pkg.add("OrdinaryDiffEqTsit5")
 ```
 
 and then load it via
 
 ```@example tut1
-using OrdinaryDiffEq
-# or using DifferentialEquations
+using OrdinaryDiffEqTsit5
 ```
 
 We can then construct our ODE problem with a trivial ODE derivative component.

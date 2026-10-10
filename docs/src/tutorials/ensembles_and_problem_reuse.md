@@ -227,7 +227,7 @@ the `alias_jumps` field of their alias specifier. When it is unspecified they re
 jump state on thread 1 and copy it on other threads. To request a copy explicitly:
 
 ```julia
-using StochasticDiffEq
+using StochasticDiffEqHighOrder
 sol = solve(sde_jprob, SRIW1(); alias = SciMLBase.SDEAliasSpecifier(alias_jumps = false))
 ```
 

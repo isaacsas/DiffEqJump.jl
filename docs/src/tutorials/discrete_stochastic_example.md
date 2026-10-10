@@ -43,14 +43,18 @@ reaction, and necessary data structures for the simulation algorithms, such as
 dependency graphs, are automatically calculated.
 
 We'll make use of [JumpProcesses.jl](https://docs.sciml.ai/JumpProcesses/stable/)
-together with [OrdinaryDiffEq.jl](https://docs.sciml.ai/OrdinaryDiffEq/stable/)
-(for ODE solvers), Plots.jl, and (optionally) Catalyst.jl in this tutorial. If
-not already installed, they can be added as follows:
+together with OrdinaryDiffEqTsit5 (for the `Tsit5` ODE solver from
+[OrdinaryDiffEq.jl](https://docs.sciml.ai/OrdinaryDiffEq/stable/)),
+StochasticDiffEqHighOrder (for the `SRIW1` SDE solver from
+[StochasticDiffEq.jl](https://docs.sciml.ai/DiffEqDocs/stable/solvers/sde_solve/)),
+Plots.jl, and (optionally) Catalyst.jl in this tutorial. If not already
+installed, they can be added as follows:
 
 ```julia
 using Pkg
 Pkg.add("JumpProcesses")
-Pkg.add("OrdinaryDiffEq")
+Pkg.add("OrdinaryDiffEqTsit5")
+Pkg.add("StochasticDiffEqHighOrder")
 Pkg.add("Plots")
 Pkg.add("Catalyst")                # optional
 ```
@@ -58,12 +62,12 @@ Pkg.add("Catalyst")                # optional
 Let's now load the required packages and set some default plot settings
 
 ```julia
-using JumpProcesses, OrdinaryDiffEq, Plots, LinearAlgebra
+using JumpProcesses, OrdinaryDiffEqTsit5, Plots, LinearAlgebra
 default(; lw = 2)
 ```
 
 ```@setup tut2
-using JumpProcesses, OrdinaryDiffEq, Plots, LinearAlgebra
+using JumpProcesses, OrdinaryDiffEqTsit5, Plots, LinearAlgebra
 default(; lw = 2)
 ```
 
@@ -820,7 +824,7 @@ differential equation. Let's define an ODE problem, where the continuous part
 only acts on some new 4th component:
 
 ```@example tut2
-using OrdinaryDiffEq
+using OrdinaryDiffEqTsit5
 function f(du, u, p, t)
     du[4] = u[2] * u[3] / 1e5 - u[1] * u[4] / 1e5
     nothing
@@ -954,7 +958,7 @@ problem except with multiplicative noise on `u[4]` by using an `SDEProblem`
 instead:
 
 ```@example tut2
-using StochasticDiffEq
+using StochasticDiffEqHighOrder
 function g(du, u, p, t)
     du[4] = 0.1u[4]
 end

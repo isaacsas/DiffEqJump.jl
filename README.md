@@ -19,9 +19,7 @@ Kinetic Monte Carlo methods across different fields of science. It also enables 
 incorporation of jump processes into hybrid jump-ODE and jump-SDE models,
 including piecewise deterministic Markov processes (PDMPs) and jump diffusions.
 
-JumpProcesses is a component package in the [SciML](https://sciml.ai/) ecosystem,
-and one of the core solver libraries included in
-[DifferentialEquations.jl](https://github.com/JuliaDiffEq/DifferentialEquations.jl).
+JumpProcesses is a component package in the [SciML](https://sciml.ai/) ecosystem.
 
 For information on using the package,
 [see the stable documentation](https://docs.sciml.ai/JumpProcesses/stable/). Use the
@@ -45,25 +43,19 @@ including documentation editing/writing. See also the [contribution section](#co
 
 ## Installation
 
-There are two ways to install `JumpProcesses.jl`. First, users may install the meta
-`DifferentialEquations.jl` package, which installs and wraps `OrdinaryDiffEq.jl`
-for solving ODEs, `StochasticDiffEq.jl` for solving SDEs, and `JumpProcesses.jl`,
-along with a number of other useful packages for solving models involving ODEs,
-SDEs and/or jump process. This single install will provide the user with all of
-the facilities for developing and solving Jump problems.
-
-To install the `DifferentialEquations.jl` package, refer to the following link
-for complete [installation
-details](https://docs.sciml.ai/DiffEqDocs/stable/).
-
-If the user wishes to separately install the `JumpProcesses.jl` library, which is a
-lighter dependency than `DifferentialEquations.jl`, then the following code will
-install `JumpProcesses.jl` using the Julia package manager:
+Install `JumpProcesses.jl` with the Julia package manager:
 
 ```julia
 using Pkg
 Pkg.add("JumpProcesses")
 ```
+
+`JumpProcesses.jl` includes `SSAStepper` for pure jump processes. To couple jumps to ODEs
+or SDEs, also install a solver package, for example `OrdinaryDiffEqTsit5` for the `Tsit5`
+ODE solver or `StochasticDiffEqHighOrder` for the `SRIW1` SDE solver. See the
+[OrdinaryDiffEq.jl](https://docs.sciml.ai/OrdinaryDiffEq/stable/) and
+[StochasticDiffEq.jl](https://docs.sciml.ai/DiffEqDocs/stable/solvers/sde_solve/)
+documentation for the available solvers and the packages that provide them.
 
 ## Examples
 
@@ -132,7 +124,7 @@ Let's solve an ODE for exponential growth, but coupled to a constant rate jump
 (Poisson) process that halves the solution each time it fires
 
 ```julia
-using DifferentialEquations, Plots
+using JumpProcesses, OrdinaryDiffEqTsit5, Plots
 
 # du/dt = u is the ODE part
 function f(du, u, p, t)

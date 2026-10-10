@@ -362,7 +362,6 @@ not need to evolve time incrementally by small deltas. The `SSAStepper` allow us
 to step through time one candidate at a time.
 
 ```@example tpp-advanced
-using OrdinaryDiffEq
 using OrdinaryDiffEqFunctionMap: FunctionMap
 using OrdinaryDiffEqRosenbrock: Rodas4P
 using Random
@@ -577,7 +576,7 @@ conditional intensity using an ODEProblem.
 function integrated_intensity(pp::SciMLPointProcess,
         t,
         h;
-        alg = nothing,
+        alg = Rodas4P(),
         saveat = [],
         save_positions = (true, true))
     p = params(pp)
