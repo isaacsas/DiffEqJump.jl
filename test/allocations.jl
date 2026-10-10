@@ -150,4 +150,20 @@ let
     end
 end
 
+# RDirectJumpAggregation.counter_threshold must be concretely typed (Int) so that
+# `p.counter > p.counter_threshold` does not runtime-dispatch every jump.
+let
+    rateidxs = [1, 2]
+    reactant_stoich = [[0 => 1], [1 => 1]]
+    net_stoich = [[1 => 1], [1 => -1]]
+    maj = MassActionJump(reactant_stoich, net_stoich; param_idxs = rateidxs)
+    dprob = DiscreteProblem([10], (0.0, 1.0), [1.0, 0.1])
+    jprob = JumpProblem(dprob, RDirect(), maj; save_positions = (false, false),
+        counter_threshold = Int32(2))
+    agg = jprob.discrete_jump_aggregation
+    @test fieldtype(typeof(agg), :counter_threshold) === Int
+    @test agg.counter_threshold isa Int
+    @test agg.counter_threshold == 2
+end
+
 nothing
