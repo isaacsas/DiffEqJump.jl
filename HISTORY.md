@@ -103,6 +103,9 @@ changes are not intended for a 9.x release.
     final callback pass. A callback that changed the state at the end time altered the
     values saved at those earlier times, and the saved times came out of order. They
     are now saved before the final callback pass.
+  - Fixed `SSAStepper` erroring with a `BoundsError` when saving only the final state:
+    `save_end = true` with nothing saved earlier, for example with `save_start = false`,
+    `save_positions = (false, false)`, and no `saveat`. The final state is now saved.
   - Fixed `init` on ODE, DAE, and `FunctionMap` integrators for `JumpProblem`s:
     callbacks stored in the `JumpProblem` (`JumpProblem(...; callback)`) were merged
     twice, so they ran twice per step, and were reintroduced even with

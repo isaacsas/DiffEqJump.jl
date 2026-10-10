@@ -187,3 +187,45 @@ end
         cb_saves[2] && @test sol.u[end] == [10]
     end
 end
+
+# Saving only the final state must work when nothing was saved earlier: no start save, no
+# event saves, and no `saveat`.
+@testset "Final-only saving" begin
+    function final_only(rate_value; callback = nothing)
+        fired = Ref(0)
+        jump = ConstantRateJump((u, p, t) -> rate_value,
+            integrator -> (integrator.u[1] += 1; fired[] += 1; nothing))
+        jprob = JumpProblem(DiscreteProblem([0], (0.0, 1.0)), Direct(), jump;
+            save_positions = (false, false))
+        sol = solve(jprob, SSAStepper(); save_start = false, save_end = true, callback,
+            seed = 1)
+        sol, fired[]
+    end
+
+    @testset "no jumps" begin
+        sol, fired = final_only(0.0)
+        @test SciMLBase.successful_retcode(sol)
+        @test fired == 0
+        @test sol.t == [1.0]
+        @test sol.u == [[0]]
+    end
+
+    @testset "with jumps" begin
+        sol, fired = final_only(20.0)
+        @test SciMLBase.successful_retcode(sol)
+        @test fired > 0
+        @test sol.t == [1.0]
+        @test sol.u == [[fired]]
+    end
+
+    # An end time already saved, here by a callback in the final callback pass, is not
+    # saved again.
+    @testset "end time already saved" begin
+        saves_at_end = DiscreteCallback((u, t, integrator) -> t == 1.0,
+            integrator -> nothing; save_positions = (false, true))
+        sol, fired = final_only(20.0; callback = saves_at_end)
+        @test SciMLBase.successful_retcode(sol)
+        @test sol.t == [1.0]
+        @test sol.u == [[fired]]
+    end
+end
