@@ -108,11 +108,9 @@ changes are not intended for a 9.x release.
     twice, so they ran twice per step, and were reintroduced even with
     `merge_callbacks = false`. `init` now combines stored and call-level callbacks
     exactly as `solve` does.
-  - StochasticDiffEqCore is now a weak dependency: when it is installed, version
-    2.2.1 or later is required. A new extension sends stochastic `init` of a
-    `JumpProblem` to StochasticDiffEqCore's own initializer on every supported version,
-    so `init` followed by `solve!` matches `solve`. StochasticDiffEqCore versions with
-    their own per-algorithm `JumpProblem` initializers take precedence automatically.
+  - Stochastic `init` of a `JumpProblem` now reaches StochasticDiffEqCore's own
+    per-algorithm `JumpProblem` initializers, so `init` followed by `solve!` matches
+    `solve`. This requires a StochasticDiffEqCore release that supports JumpProcesses 10.
   - The state types `SSAStepper` supports are now documented: vectors and
     `SVector`s of integers or floats, species × sites matrices for spatial
     problems, and scalars for models without mass-action jumps. See "Supported

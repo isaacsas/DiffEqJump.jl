@@ -311,13 +311,9 @@ For **StochasticDiffEq SDE/RODE solvers**, both `solve` and `init` reach the
 backend's JumpProblem initializer, StochasticDiffEqCore's `_sde_init`, with the
 original JumpProblem and unchanged RNG/seed inputs, so they share its RNG policy,
 jump-state copying, and callback setup. `solve` goes through the backend's more
-specific `__solve`. For `init`, StochasticDiffEqCore versions with per-algorithm
-`__init(::JumpProblem, ...)` methods own dispatch directly; on other versions,
-JumpProcesses' `JumpProcessesStochasticDiffEqCoreExt` extension adds one
-`__init(::JumpProblem, ::Union{StochasticDiffEqAlgorithm, StochasticDiffEqRODEAlgorithm})`
-method that forwards to `_sde_init`, resolving an otherwise ambiguous dispatch. The
-backend's per-algorithm methods are more specific and take precedence wherever they
-exist, as does its method for jump algorithms such as `TauLeaping`.
+specific `__solve`. For `init`, the backend's per-algorithm `__init(::JumpProblem, ...)`
+methods, and its method for jump algorithms such as `TauLeaping`, are more specific than
+JumpProcesses' OrdinaryDiffEqCore extension method and own dispatch directly.
 
 DiffEqBase's `init_call` merges the JumpProblem's stored keywords and user callbacks
 once, before dispatching to `__init`; JumpProcesses' `__init` methods do not merge

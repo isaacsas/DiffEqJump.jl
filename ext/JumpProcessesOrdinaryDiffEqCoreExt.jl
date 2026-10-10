@@ -17,8 +17,8 @@ function SciMLBase.__init(
             StochasticDiffEqAlgorithm, StochasticDiffEqRODEAlgorithm};
         kwargs...) where {IIP, P}
     # Cover the full intersection with OrdinaryDiffEqCore's initializer. SDE/RODE
-    # initialization belongs to StochasticDiffEqCore: its per-algorithm methods where it
-    # has them, otherwise the forwarding method in JumpProcessesStochasticDiffEqCoreExt.
+    # initialization belongs to StochasticDiffEqCore, whose per-algorithm methods are
+    # more specific.
     _jump_init(_jump_prob, alg; kwargs...)
 end
 

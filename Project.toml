@@ -27,13 +27,11 @@ Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
 OrdinaryDiffEqCore = "bbf590c4-e513-4bbe-9b18-05decba2e5d8"
-StochasticDiffEqCore = "19c5a474-6cd1-4a5f-be79-46dc34e54d7f"
 
 [extensions]
 JumpProcessesForwardDiffExt = "ForwardDiff"
 JumpProcessesKernelAbstractionsExt = ["Adapt", "KernelAbstractions"]
 JumpProcessesOrdinaryDiffEqCoreExt = "OrdinaryDiffEqCore"
-JumpProcessesStochasticDiffEqCoreExt = ["OrdinaryDiffEqCore", "StochasticDiffEqCore"]
 
 [compat]
 ADTypes = "1.22.0"
@@ -66,10 +64,17 @@ StableRNGs = "1"
 StaticArrays = "1.9.18"
 Statistics = "1"
 StochasticDiffEq = "7.0.0, 7"
-StochasticDiffEqCore = "2.2.1"
+StochasticDiffEqCore = "2.2.3"
 SymbolicIndexingInterface = "0.3.48"
 Test = "1"
 julia = "1.10"
+
+[sources]
+# Temporary: tests use the StochasticDiffEqCore branch for JumpProcesses 10
+# (OrdinaryDiffEq.jl#4836), which removes the need for a JumpProcesses StochasticDiffEqCore
+# extension. Remove when it is released. Julia 1.10 ignores [sources]; see
+# test/test_groups.toml.
+StochasticDiffEqCore = {url = "https://github.com/isaacsas/OrdinaryDiffEq.jl.git", rev = "7a0294b8a8368f7b1fb17bf5ec4e56d80db4e8cf", subdir = "lib/StochasticDiffEqCore"}
 
 [extras]
 Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"

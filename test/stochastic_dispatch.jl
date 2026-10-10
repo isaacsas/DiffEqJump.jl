@@ -24,55 +24,32 @@ function stochastic_rng_options(kind)
 end
 
 const SDECore = StochasticDiffEq.StochasticDiffEqCore
-const SDE_BRIDGE = Base.get_extension(JumpProcesses, :JumpProcessesStochasticDiffEqCoreExt)
-const BRIDGE_SIGNATURE = Tuple{typeof(SciMLBase.__init), JumpProblem,
-    Union{SDECore.StochasticDiffEqAlgorithm, SDECore.StochasticDiffEqRODEAlgorithm}}
+const ODECORE_EXT = Base.get_extension(JumpProcesses, :JumpProcessesOrdinaryDiffEqCoreExt)
 
-# Whether StochasticDiffEqCore defines its own `__init(::JumpProblem, ::A)` for the
-# algorithm supertype `A`, as Core versions with OrdinaryDiffEq.jl#4614 do. Decided from
-# the method table rather than Core's version number.
-function core_owns_jump_init(A)
-    signature = Tuple{typeof(SciMLBase.__init), JumpProblem, A}
-    any(m -> m.module === SDECore && m.sig == signature, methods(SciMLBase.__init))
-end
-
-# Whether a method is the forwarding method, or a `__init`, `__solve`, or
-# `supports_solve_rng` method for `JumpProblem`s.
+# Whether a method is a `__init`, `__solve`, or `supports_solve_rng` method for
+# `JumpProblem`s.
 function involves_jump_init(m)
-    m.module === SDE_BRIDGE && return true
     m.name in (:__init, :__solve, :supports_solve_rng) || return false
     any(T -> T isa Type && T <: JumpProblem, Base.unwrap_unionall(m.sig).parameters)
 end
 
 @testset "Stochastic initialization dispatches to the backend" begin
-    @test SDE_BRIDGE !== nothing
+    # Core's per-algorithm methods are more specific than JumpProcesses' extension method.
     for (kind, alg, A) in ((:SDE, EM(), SDECore.StochasticDiffEqAlgorithm),
         (:RODE, RandomEM(), SDECore.StochasticDiffEqRODEAlgorithm))
         jprob = stochastic_jump_problem(kind)
         method = which(SciMLBase.__init, (typeof(jprob), typeof(alg)))
-        if core_owns_jump_init(A)
-            # Core's per-algorithm method is more specific than the forwarding method.
-            @test method.module === SDECore
-            @test method.sig == Tuple{typeof(SciMLBase.__init), JumpProblem, A}
-        else
-            # Otherwise JumpProcesses' extension forwards to Core's `_sde_init`.
-            @test method.module === SDE_BRIDGE
-            @test method.sig == BRIDGE_SIGNATURE
-        end
+        @test method.module === SDECore
+        @test method.sig == Tuple{typeof(SciMLBase.__init), JumpProblem, A}
     end
 
-    # The forwarding method exists once, owned by the extension: Core never overwrites it.
-    bridge_methods = filter(m -> m.sig == BRIDGE_SIGNATURE, collect(methods(SciMLBase.__init)))
-    @test length(bridge_methods) == 1
-    @test only(bridge_methods).module === SDE_BRIDGE
-
-    # Core's jump-algorithm method (e.g. `TauLeaping`) is more specific than the bridge.
+    # So is Core's jump-algorithm method (e.g. `TauLeaping`).
     jprob = stochastic_jump_problem(:SDE)
     @test which(SciMLBase.__init, (typeof(jprob), typeof(TauLeaping()))).module === SDECore
 
-    # No ambiguity involves the forwarding method or a `JumpProblem` method of `__init`,
-    # `__solve`, or `supports_solve_rng`.
-    ambiguities = Test.detect_ambiguities(JumpProcesses, SDECore, SDE_BRIDGE)
+    # No ambiguity involves a `JumpProblem` method of `__init`, `__solve`, or
+    # `supports_solve_rng`.
+    ambiguities = Test.detect_ambiguities(JumpProcesses, SDECore, ODECORE_EXT)
     @test !any(pair -> any(involves_jump_init, pair), ambiguities)
 end
 
